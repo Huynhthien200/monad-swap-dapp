@@ -8,7 +8,8 @@ export default function Swap() {
   const [balance, setBalance] = useState(''); // Số dư native (MON)
   const [availableTokens, setAvailableTokens] = useState([]); // Danh sách token có số dư > 0
   const [selectedToken, setSelectedToken] = useState(''); // Token đang chọn ở mục "You pay"
-  const [tokenB, setTokenB] = useState('Select a token');
+  const [tokenB, setTokenB] = useState('Select a token'); // Token ở mục "Select a token"
+  const [loading, setLoading] = useState(false); // Trạng thái loading khi đang swap
 
   // Dummy list các token ERC20 trên Monad Testnet (địa chỉ cần thay bằng thật)
   const tokenList = [
@@ -32,11 +33,14 @@ export default function Swap() {
         type: "function",
       },
     ];
+
     const tokensWithBalance = [];
+
     // Thêm native token MON
     if (parseFloat(nativeBalance) > 0) {
       tokensWithBalance.push({ symbol: "MON", balance: nativeBalance, isNative: true });
     }
+
     // Duyệt qua danh sách token ERC20
     for (const token of tokenList) {
       try {
@@ -50,6 +54,14 @@ export default function Swap() {
         console.error("Error fetching balance for", token.symbol, error);
       }
     }
+
+    // Quét số dư của token MON (native)
+    const monBalanceWei = await web3.eth.getBalance(account);
+    const monBalance = web3.utils.fromWei(monBalanceWei, 'ether');
+    if (parseFloat(monBalance) > 0) {
+      tokensWithBalance.push({ symbol: "MON", balance: monBalance, isNative: true });
+    }
+
     return tokensWithBalance;
   };
 
@@ -90,11 +102,49 @@ export default function Swap() {
     }
   };
 
-  const swapTokens = () => {
-    // Đổi chỗ token giữa mục "You pay" (selectedToken) và mục "Select a token" (tokenB)
-    const temp = selectedToken;
-    setSelectedToken(tokenB);
-    setTokenB(temp);
+  // Hàm thực hiện swap
+  const swapTokens = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      alert("Please enter a valid amount to swap.");
+      return;
+    }
+
+    setLoading(true);
+    const web3 = new Web3(window.ethereum);
+    const fromToken = selectedToken;
+    const toToken = tokenB;
+
+    // Lógica swap với token ERC20
+    if (fromToken === "MON" && toToken !== "MON") {
+      // Nếu từ MON chuyển sang token ERC20
+      const token = tokenList.find(token => token.symbol === toToken);
+      if (!token) {
+        alert("Invalid token selected for swap.");
+        setLoading(false);
+        return;
+      }
+
+      const contract = new web3.eth.Contract(erc20ABI, token.address);
+      const amountInWei = web3.utils.toWei(amount, 'ether');
+      
+      try {
+        // Gọi hàm chuyển token từ MON sang token ERC20 (tạm giả định sử dụng hàm chuyển cho ví MON)
+        const tx = await web3.eth.sendTransaction({
+          from: account,
+          to: token.address,
+          value: amountInWei,
+        });
+        console.log("Swap success:", tx);
+        alert("Swap successful!");
+      } catch (error) {
+        console.error("Error during swap:", error);
+        alert("Swap failed.");
+      }
+    } else {
+      // Thêm logic cho trường hợp swap giữa hai token ERC20 nếu cần thiết
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -156,7 +206,9 @@ export default function Swap() {
           </div>
 
           <div className="text-center mb-3">
-            <button onClick={swapTokens} className="bg-blue-500 text-white p-2 rounded-full">⬇️</button>
+            <button onClick={swapTokens} disabled={loading} className="bg-blue-500 text-white p-2 rounded-full">
+              {loading ? "Swapping..." : "⬇️ Swap"}
+            </button>
           </div>
 
           <div className="bg-gray-100 p-4 rounded-lg mb-5">
@@ -173,14 +225,6 @@ export default function Swap() {
             </select>
           </div>
 
-          <motion.button 
-            className="bg-blue-500 text-white w-full p-3 rounded-lg hover:bg-blue-400"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={connectWallet}
-          >
-            {account ? `Connected: ${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect wallet'}
-          </motion.button>
         </motion.div>
       ) : (
         <div className="text-lg font-bold">
@@ -199,59 +243,6 @@ export default function Swap() {
       </motion.div>
 
       <p className="mt-5 text-gray-500">Made by Huynhthien200 ❤️</p>
-
-      {/* Inline CSS global using styled-jsx */}
-      <style jsx global>{`
-        /* Layout */
-        .min-h-screen { min-height: 100vh; }
-        .flex { display: flex; }
-        .flex-col { flex-direction: column; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .w-full { width: 100%; }
-        .max-w-6xl { max-width: 72rem; }
-        .max-w-md { max-width: 28rem; }
-        .p-10 { padding: 2.5rem; }
-        .p-8 { padding: 2rem; }
-        .p-4 { padding: 1rem; }
-        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
-        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-        .p-3 { padding: 0.75rem; }
-        .mb-10 { margin-bottom: 2.5rem; }
-        .mb-5 { margin-bottom: 1.25rem; }
-        .mt-5 { margin-top: 1.25rem; }
-        .mt-10 { margin-top: 2.5rem; }
-
-        /* Typography */
-        .text-2xl { font-size: 1.5rem; }
-        .text-xl { font-size: 1.25rem; }
-        .text-sm { font-size: 0.875rem; }
-        .font-bold { font-weight: 700; }
-        .text-white { color: #ffffff; }
-        .text-gray-500 { color: #6b7280; }
-        .text-gray-600 { color: #4b5563; }
-
-        /* Backgrounds */
-        .bg-gradient-to-b { background-image: linear-gradient(to bottom, #eff6ff, #ffffff); }
-        .from-blue-50 { /* part of gradient */ }
-        .to-white { /* part of gradient */ }
-        .bg-white { background-color: #ffffff; }
-        .bg-gray-100 { background-color: #f3f4f6; }
-        .bg-blue-500 { background-color: #3b82f6; }
-        .bg-blue-400 { background-color: #60a5fa; }
-        .bg-black { background-color: #000000; }
-
-        /* Borders & Shadows */
-        .rounded-lg { border-radius: 0.5rem; }
-        .rounded-2xl { border-radius: 1rem; }
-        .rounded-full { border-radius: 9999px; }
-        .shadow-xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
-        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-
-        /* Misc */
-        .outline-none { outline: none; }
-        .hover\\:bg-blue-400:hover { background-color: #60a5fa; }
-      `}</style>
     </div>
   );
 }
