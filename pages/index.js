@@ -5,19 +5,59 @@ import Web3 from 'web3';
 export default function Swap() {
   const [amount, setAmount] = useState('');
   const [account, setAccount] = useState(null);
-  const [balance, setBalance] = useState('');
-  const [tokenA, setTokenA] = useState('ETH');
+  const [balance, setBalance] = useState(''); // Số dư native (MON)
+  const [availableTokens, setAvailableTokens] = useState([]); // Danh sách token có số dư > 0
+  const [selectedToken, setSelectedToken] = useState(''); // Token đang chọn ở mục "You pay"
   const [tokenB, setTokenB] = useState('Select a token');
+
+  // Dummy list các token ERC20 trên Monad Testnet (địa chỉ cần thay bằng thật)
+  const tokenList = [
+    { symbol: "BTC", address: "0xBTCADDRESS", isNative: false },
+    { symbol: "BNB", address: "0xBNBADDRESS", isNative: false },
+    { symbol: "USDT", address: "0xUSDTADDRESS", isNative: false },
+  ];
 
   const handleInput = (e) => {
     setAmount(e.target.value);
+  };
+
+  // Hàm truy vấn số dư của các token ERC20 và cập nhật availableTokens
+  const fetchTokenBalances = async (web3, account, nativeBalance) => {
+    const erc20ABI = [
+      {
+        constant: true,
+        inputs: [{ name: "_owner", type: "address" }],
+        name: "balanceOf",
+        outputs: [{ name: "", type: "uint256" }],
+        type: "function",
+      },
+    ];
+    const tokensWithBalance = [];
+    // Thêm native token MON
+    if (parseFloat(nativeBalance) > 0) {
+      tokensWithBalance.push({ symbol: "MON", balance: nativeBalance, isNative: true });
+    }
+    // Duyệt qua danh sách token ERC20
+    for (const token of tokenList) {
+      try {
+        const contract = new web3.eth.Contract(erc20ABI, token.address);
+        const tokenBalanceWei = await contract.methods.balanceOf(account).call();
+        const tokenBalance = web3.utils.fromWei(tokenBalanceWei, 'ether');
+        if (parseFloat(tokenBalance) > 0) {
+          tokensWithBalance.push({ ...token, balance: tokenBalance });
+        }
+      } catch (error) {
+        console.error("Error fetching balance for", token.symbol, error);
+      }
+    }
+    return tokensWithBalance;
   };
 
   const connectWallet = async () => {
     if (window.ethereum) {
       const web3 = new Web3(window.ethereum);
       try {
-        // Thêm mạng Monad Testnet với các thông số cập nhật
+        // Thêm mạng Monad Testnet với thông số mới
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
@@ -28,13 +68,20 @@ export default function Swap() {
             blockExplorerUrls: ["https://testnet.monadexplorer.com/"]
           }]
         });
-        // Yêu cầu kết nối ví
+        // Kết nối ví
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         setAccount(accounts[0]);
-        // Đọc số dư của ví
+        // Lấy số dư native token
         const balanceInWei = await web3.eth.getBalance(accounts[0]);
-        const balanceEther = web3.utils.fromWei(balanceInWei, 'ether');
-        setBalance(balanceEther);
+        const nativeBalance = web3.utils.fromWei(balanceInWei, 'ether');
+        setBalance(nativeBalance);
+        // Lấy danh sách token có số dư > 0 (bao gồm native MON)
+        const tokens = await fetchTokenBalances(web3, accounts[0], nativeBalance);
+        setAvailableTokens(tokens);
+        // Nếu danh sách có token, chọn token đầu tiên làm mặc định
+        if (tokens.length > 0) {
+          setSelectedToken(tokens[0].symbol);
+        }
       } catch (error) {
         console.error("User denied account access or error occurred", error);
       }
@@ -44,9 +91,10 @@ export default function Swap() {
   };
 
   const swapTokens = () => {
-    // Đổi chỗ token: tokenA <-> tokenB
-    setTokenA(tokenB);
-    setTokenB(tokenA);
+    // Đổi chỗ token giữa mục "You pay" (selectedToken) và mục "Select a token" (tokenB)
+    const temp = selectedToken;
+    setSelectedToken(tokenB);
+    setTokenB(temp);
   };
 
   return (
@@ -71,7 +119,7 @@ export default function Swap() {
         </div>
       )}
 
-      {/* Swap section: chỉ hiển thị khi ví đã được kết nối */}
+      {/* Mục "You pay" chỉ hiển thị khi ví đã được kết nối */}
       {account ? (
         <motion.div 
           className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full relative"
@@ -84,13 +132,18 @@ export default function Swap() {
             <div className="flex justify-between items-center">
               <select 
                 className="bg-transparent outline-none font-bold" 
-                onChange={(e) => setTokenA(e.target.value)}
-                value={tokenA}
+                onChange={(e) => setSelectedToken(e.target.value)}
+                value={selectedToken}
               >
-                <option>ETH</option>
-                <option>BTC</option>
-                <option>BNB</option>
-                <option>USDT</option>
+                {availableTokens.length > 0 ? (
+                  availableTokens.map((token, idx) => (
+                    <option key={idx} value={token.symbol}>
+                      {token.symbol} ({token.balance})
+                    </option>
+                  ))
+                ) : (
+                  <option>No token available</option>
+                )}
               </select>
               <input 
                 type="number" 
