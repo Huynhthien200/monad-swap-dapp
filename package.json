@@ -5,6 +5,7 @@
     "build": "next build",
     "start": "next start",
     "dev": "next dev"
+    "postinstall": "npx tailwindcss build -o ./styles/output.css"
   },
   "dependencies": {
     "framer-motion": "^10.12.2",
