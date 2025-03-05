@@ -1,4 +1,3 @@
-import '../styles/globals.css';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Web3 from 'web3';
@@ -113,6 +112,59 @@ export default function Swap() {
       </motion.div>
 
       <p className="mt-5 text-gray-500">Made by Huynhthien200 ❤️</p>
+
+      {/* Inline CSS global using styled-jsx */}
+      <style jsx global>{`
+        /* Container & Layout */
+        .min-h-screen { min-height: 100vh; }
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .w-full { width: 100%; }
+        .max-w-6xl { max-width: 72rem; }
+        .max-w-md { max-width: 28rem; }
+        .p-10 { padding: 2.5rem; }
+        .p-8 { padding: 2rem; }
+        .p-4 { padding: 1rem; }
+        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .p-3 { padding: 0.75rem; }
+        .mb-10 { margin-bottom: 2.5rem; }
+        .mb-5 { margin-bottom: 1.25rem; }
+        .mt-5 { margin-top: 1.25rem; }
+        .mt-10 { margin-top: 2.5rem; }
+
+        /* Typography */
+        .text-2xl { font-size: 1.5rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-sm { font-size: 0.875rem; }
+        .font-bold { font-weight: 700; }
+        .text-white { color: #ffffff; }
+        .text-gray-500 { color: #6b7280; }
+        .text-gray-600 { color: #4b5563; }
+
+        /* Backgrounds */
+        .bg-gradient-to-b { background-image: linear-gradient(to bottom, #eff6ff, #ffffff); }
+        .from-blue-50 { /* part of gradient */ }
+        .to-white { /* part of gradient */ }
+        .bg-white { background-color: #ffffff; }
+        .bg-gray-100 { background-color: #f3f4f6; }
+        .bg-blue-500 { background-color: #3b82f6; }
+        .bg-blue-400 { background-color: #60a5fa; }
+        .bg-black { background-color: #000000; }
+
+        /* Borders & Shadows */
+        .rounded-lg { border-radius: 0.5rem; }
+        .rounded-2xl { border-radius: 1rem; }
+        .rounded-full { border-radius: 9999px; }
+        .shadow-xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+        /* Misc */
+        .outline-none { outline: none; }
+        .hover\\:bg-blue-400:hover { background-color: #60a5fa; }
+      `}</style>
     </div>
   );
 }
