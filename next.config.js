@@ -1,6 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+// next.config.js
+module.exports = {
   reactStrictMode: true,
+  experimental: {
+    appDir: true, // Để hỗ trợ sử dụng thư mục app trong Next.js 13
+  },
 };
-
-module.exports = nextConfig;
