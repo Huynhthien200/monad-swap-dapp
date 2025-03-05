@@ -44,6 +44,7 @@ export default function Swap() {
   const [tokenB, setTokenB] = useState('PDC');
   const [loading, setLoading] = useState(false);
   const [web3, setWeb3] = useState(null);
+  const tokenList = getTokenList();
 
   useEffect(() => {
     if (window.ethereum) {
@@ -111,18 +112,31 @@ export default function Swap() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(to bottom, #ebf8ff, white)', padding: '24px' }}>
       <div style={{ width: '100%', maxWidth: '400px', backgroundColor: 'white', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', borderRadius: '16px', padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Swap</h2>
-          <motion.button 
-            style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={connectWallet}
-          >
-            {account ? `Connected: ${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
-          </motion.button>
-        </div>
-        <p style={{ textAlign: 'center', fontSize: '14px', color: '#4b5563' }}>Balance: {balance} MON</p>
+        <h2 style={{ fontSize: '20px', fontWeight: 'bold', textAlign: 'center' }}>Swap</h2>
+        <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+          {tokenList.map((token) => (
+            <option key={token.address} value={token.address}>{token.symbol}</option>
+          ))}
+        </select>
+        <select value={tokenB} onChange={(e) => setTokenB(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+          {tokenList.map((token) => (
+            <option key={token.address} value={token.address}>{token.symbol}</option>
+          ))}
+        </select>
+        <input 
+          type="number" 
+          value={amount} 
+          onChange={handleInput} 
+          placeholder="Enter amount" 
+          style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '10px' }}
+        />
+        <motion.button 
+          onClick={swapTokens} 
+          disabled={loading} 
+          style={{ width: '100%', padding: '10px', backgroundColor: '#3b82f6', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+        >
+          {loading ? 'Swapping...' : 'Swap'}
+        </motion.button>
       </div>
     </div>
   );
