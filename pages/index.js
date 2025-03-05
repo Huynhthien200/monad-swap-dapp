@@ -10,7 +10,7 @@ const MONAD_TESTNET_PARAMS = {
   blockExplorerUrls: ['https://testnet.monadexplorer.com/'],
 };
 
-const SWAP_CONTRACT_ADDRESS = '0x083978Dd12842779e907472A331314190730a5Bf'; // Địa chỉ contract PDC
+const SWAP_CONTRACT_ADDRESS = '0x083978Dd12842779e907472A331314190730a5Bf';
 const SWAP_CONTRACT_ABI = [
   {
     "constant": false,
@@ -25,26 +25,36 @@ const SWAP_CONTRACT_ABI = [
   }
 ];
 
-const getTokenList = () => [
-  {
-    name: "PurpleDuck",
-    symbol: "PDC",
-    address: "0x083978Dd12842779e907472A331314190730a5Bf",
-    decimals: 18,
-    chainId: 10143,
-    logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/08a10a45-3c84-4b21-b202-53b952780b39.webp"
+const getTokenList = async (web3, account) => {
+  const tokenList = [
+    {
+      name: "PurpleDuck",
+      symbol: "PDC",
+      address: "0x083978Dd12842779e907472A331314190730a5Bf",
+      decimals: 18,
+      chainId: 10143,
+      logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/08a10a45-3c84-4b21-b202-53b952780b39.webp"
+    }
+  ];
+  
+  for (const token of tokenList) {
+    const contract = new web3.eth.Contract([
+      { "constant": true, "inputs": [{ "name": "owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" }
+    ], token.address);
+    const balance = await contract.methods.balanceOf(account).call();
+    token.balance = web3.utils.fromWei(balance, 'ether');
   }
-];
+  return tokenList;
+};
 
 export default function Swap() {
   const [amount, setAmount] = useState('');
   const [account, setAccount] = useState(null);
-  const [balance, setBalance] = useState('');
-  const [selectedToken, setSelectedToken] = useState('MON');
-  const [tokenB, setTokenB] = useState('PDC');
+  const [tokenList, setTokenList] = useState([]);
+  const [selectedToken, setSelectedToken] = useState(null);
+  const [tokenB, setTokenB] = useState(null);
   const [loading, setLoading] = useState(false);
   const [web3, setWeb3] = useState(null);
-  const tokenList = getTokenList();
 
   useEffect(() => {
     if (window.ethereum) {
@@ -62,7 +72,10 @@ export default function Swap() {
         const accounts = await web3.eth.getAccounts();
         setAccount(accounts[0]);
         await switchToMonadTestnet();
-        fetchBalance(accounts[0]);
+        const tokens = await getTokenList(web3, accounts[0]);
+        setTokenList(tokens);
+        setSelectedToken(tokens[0]?.address);
+        setTokenB(tokens[1]?.address);
       } catch (error) {
         console.error('User denied account access', error);
       }
@@ -83,11 +96,6 @@ export default function Swap() {
     }
   };
 
-  const fetchBalance = async (walletAddress) => {
-    const balanceWei = await web3.eth.getBalance(walletAddress);
-    setBalance(web3.utils.fromWei(balanceWei, 'ether'));
-  };
-
   const swapTokens = async () => {
     if (!amount || parseFloat(amount) <= 0) {
       alert('Please enter a valid amount.');
@@ -101,7 +109,6 @@ export default function Swap() {
     try {
       await swapContract.methods.swap(amountInWei, selectedToken, tokenB).send({ from: account });
       alert('Swap successful!');
-      fetchBalance(account);
     } catch (error) {
       console.error('Swap failed', error);
       alert('Swap failed.');
@@ -111,16 +118,17 @@ export default function Swap() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(to bottom, #ebf8ff, white)', padding: '24px' }}>
+      <button onClick={connectWallet} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#ff9800', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>Connect Wallet</button>
       <div style={{ width: '100%', maxWidth: '400px', backgroundColor: 'white', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', borderRadius: '16px', padding: '24px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 'bold', textAlign: 'center' }}>Swap</h2>
         <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
           {tokenList.map((token) => (
-            <option key={token.address} value={token.address}>{token.symbol}</option>
+            <option key={token.address} value={token.address}>{token.symbol} ({token.balance} available)</option>
           ))}
         </select>
         <select value={tokenB} onChange={(e) => setTokenB(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
           {tokenList.map((token) => (
-            <option key={token.address} value={token.address}>{token.symbol}</option>
+            <option key={token.address} value={token.address}>{token.symbol} ({token.balance} available)</option>
           ))}
         </select>
         <input 
