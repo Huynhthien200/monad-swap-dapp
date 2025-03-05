@@ -44,4 +44,38 @@ export default function Swap() {
   async function swapTokens() {
     if (!contract) return alert("Vui lòng kết nối ví!");
     const tx = await contract.swap(tokenA, tokenB, ethers.parseUnits(amount, 18));
-    await tx.wait(
+    await tx.wait();
+    alert("Swap thành công trên Monad!");
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6">
+      <h1 className="text-3xl font-bold mb-6">DApp Swap trên Monad</h1>
+      <button onClick={connectWallet} className="bg-blue-600 px-6 py-2 rounded-lg mb-4">
+        Kết nối Ví
+      </button>
+      <input
+        type="text"
+        placeholder="Token A Address"
+        value={tokenA}
+        onChange={(e) => setTokenA(e.target.value)}
+        className="w-80 p-2 mb-2 text-black rounded-lg"
+      />
+      <input
+        type="text"
+        placeholder="Token B Address"
+        onChange={(e) => setTokenB(e.target.value)}
+        className="w-80 p-2 mb-2 text-black rounded-lg"
+      />
+      <input
+        type="number"
+        placeholder="Số lượng"
+        onChange={(e) => setAmount(e.target.value)}
+        className="w-80 p-2 mb-4 text-black rounded-lg"
+      />
+      <button onClick={swapTokens} className="bg-green-600 px-6 py-2 rounded-lg">
+        Swap
+      </button>
+    </div>
+  );
+}
