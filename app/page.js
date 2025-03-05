@@ -1,81 +1,67 @@
-"use client"; // Nếu dùng App Router
+"use client";
+import { useState } from 'react';
+import { ethers } from 'ethers';
 
-import { useState, useEffect } from "react";
-import { ethers } from "ethers";
+export default function App() {
+  const [userAddress, setUserAddress] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [message, setMessage] = useState('');
 
-const CONTRACT_ADDRESS = "0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701"; // Hợp đồng Swap trên Monad
-const CONTRACT_ABI = [
-  {
-    "inputs": [
-      { "internalType": "address", "name": "tokenA", "type": "address" },
-      { "internalType": "address", "name": "tokenB", "type": "address" },
-      { "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "swap",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-export default function Swap() {
-  const [provider, setProvider] = useState(null);
-  const [signer, setSigner] = useState(null);
-  const [contract, setContract] = useState(null);
-  const [tokenA, setTokenA] = useState("0x083978Dd12842779e907472A331314190730a5Bf");
-  const [tokenB, setTokenB] = useState("");
-  const [amount, setAmount] = useState("");
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.ethereum) {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      setProvider(provider);
-    }
-  }, []);
+  const contractAddress = "0xYourSmartContractAddressHere";
+  const contractABI = [
+    "function swap(uint256 amount) public",
+    "function getRate() public view returns (uint256)"
+  ];
 
   async function connectWallet() {
-    if (!provider) return alert("Vui lòng cài đặt MetaMask!");
-    const signer = await provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-    setSigner(signer);
-    setContract(contract);
+    if (window.ethereum) {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      setUserAddress(address);
+    } else {
+      alert("Vui lòng cài đặt MetaMask!");
+    }
   }
 
-  async function swapTokens() {
-    if (!contract) return alert("Vui lòng kết nối ví!");
-    const tx = await contract.swap(tokenA, tokenB, ethers.parseUnits(amount, 18));
-    await tx.wait();
-    alert("Swap thành công trên Monad!");
+  async function swapToken() {
+    if (!userAddress) {
+      alert("Vui lòng kết nối ví trước!");
+      return;
+    }
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const contract = new ethers.Contract(contractAddress, contractABI, signer);
+    try {
+      const tx = await contract.swap(ethers.utils.parseEther(amount));
+      setMessage("Giao dịch đang xử lý...");
+      await tx.wait();
+      setMessage(`Swap thành công: ${amount} Token`);
+    } catch (error) {
+      setMessage("Giao dịch thất bại!");
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6">
-      <h1 className="text-3xl font-bold mb-6">DApp Swap trên Monad</h1>
-      <button onClick={connectWallet} className="bg-blue-600 px-6 py-2 rounded-lg mb-4">
-        Kết nối Ví
+    <div className="bg-gray-900 text-white text-center p-10">
+      <h1 className="text-4xl mb-6">Monad Swap DApp</h1>
+      <button onClick={connectWallet} className="bg-blue-600 p-3 rounded-lg">
+        {userAddress ? `Đã kết nối: ${userAddress}` : "Kết nối ví MetaMask"}
       </button>
-      <input
-        type="text"
-        placeholder="Token A Address"
-        value={tokenA}
-        onChange={(e) => setTokenA(e.target.value)}
-        className="w-80 p-2 mb-2 text-black rounded-lg"
-      />
-      <input
-        type="text"
-        placeholder="Token B Address"
-        onChange={(e) => setTokenB(e.target.value)}
-        className="w-80 p-2 mb-2 text-black rounded-lg"
-      />
-      <input
-        type="number"
-        placeholder="Số lượng"
-        onChange={(e) => setAmount(e.target.value)}
-        className="w-80 p-2 mb-4 text-black rounded-lg"
-      />
-      <button onClick={swapTokens} className="bg-green-600 px-6 py-2 rounded-lg">
-        Swap
-      </button>
+      <div className="mt-6">
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Nhập số lượng Token"
+          className="p-2 text-black"
+        />
+        <button onClick={swapToken} className="bg-green-600 p-3 rounded-lg">
+          Swap Token
+        </button>
+      </div>
+      <div className="mt-4">{message}</div>
     </div>
   );
 }
