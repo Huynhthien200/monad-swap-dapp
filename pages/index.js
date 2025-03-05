@@ -1,3 +1,4 @@
+import '../styles/globals.css';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Web3 from 'web3';
