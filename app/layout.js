@@ -1,15 +1,8 @@
-// app/layout.js
-export default function RootLayout({ children }) {
+export default function Layout({ children }) {
   return (
     <html lang="en">
-      <body>
-        <header>
-          <h1>My Next.js App</h1>
-        </header>
-        <main>{children}</main>
-        <footer>
-          <p>© 2025 My App</p>
-        </footer>
+      <body className="bg-gray-900 text-white">
+        {children}
       </body>
     </html>
   );
