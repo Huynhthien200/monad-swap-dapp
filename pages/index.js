@@ -17,15 +17,15 @@ export default function Swap() {
     if (window.ethereum) {
       const web3 = new Web3(window.ethereum);
       try {
-        // Thêm Chain Monad Testnet nếu chưa có
+        // Thêm mạng Monad Testnet với các thông số cập nhật
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
-            chainId: '0x505',
-            chainName: 'Monad Testnet',
-            nativeCurrency: { name: 'tMON', symbol: 'tMON', decimals: 18 },
-            rpcUrls: ['https://rpc.testnet.monad.xyz'],
-            blockExplorerUrls: ['https://explorer.testnet.monad.xyz']
+            chainId: "0x279F", // 10143 ở dạng hex
+            chainName: "Monad Testnet",
+            nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+            rpcUrls: ["https://testnet-rpc.monad.xyz/"],
+            blockExplorerUrls: ["https://testnet.monadexplorer.com/"]
           }]
         });
         // Yêu cầu kết nối ví
@@ -44,12 +44,14 @@ export default function Swap() {
   };
 
   const swapTokens = () => {
+    // Đổi chỗ token: tokenA <-> tokenB
     setTokenA(tokenB);
     setTokenB(tokenA);
   };
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-gradient-to-b from-blue-50 to-white p-10">
+      {/* Header */}
       <div className="w-full max-w-6xl flex justify-between items-center mb-10">
         <div className="text-2xl font-bold">Trade</div>
         <motion.button 
@@ -62,69 +64,78 @@ export default function Swap() {
         </motion.button>
       </div>
 
+      {/* Hiển thị số dư nếu đã kết nối */}
       {account && (
         <div className="mb-5 text-lg font-bold">
-          Balance: {balance} tMON
+          Balance: {balance} MON
         </div>
       )}
 
-      <motion.div 
-        className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full relative"
-        animate={{ scale: [1, 1.02, 1] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      >
-        <div className="text-xl font-bold text-center mb-5">Swap</div>
-        <div className="bg-gray-100 p-4 rounded-lg mb-3">
-          <label className="block text-sm text-gray-600 mb-1">You pay</label>
-          <div className="flex justify-between items-center">
+      {/* Swap section: chỉ hiển thị khi ví đã được kết nối */}
+      {account ? (
+        <motion.div 
+          className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full relative"
+          animate={{ scale: [1, 1.02, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <div className="text-xl font-bold text-center mb-5">Swap</div>
+          <div className="bg-gray-100 p-4 rounded-lg mb-3">
+            <label className="block text-sm text-gray-600 mb-1">You pay</label>
+            <div className="flex justify-between items-center">
+              <select 
+                className="bg-transparent outline-none font-bold" 
+                onChange={(e) => setTokenA(e.target.value)}
+                value={tokenA}
+              >
+                <option>ETH</option>
+                <option>BTC</option>
+                <option>BNB</option>
+                <option>USDT</option>
+              </select>
+              <input 
+                type="number" 
+                className="bg-transparent text-right w-24 outline-none" 
+                placeholder="Amount" 
+                value={amount} 
+                onChange={handleInput} 
+              />
+            </div>
+          </div>
+
+          <div className="text-center mb-3">
+            <button onClick={swapTokens} className="bg-blue-500 text-white p-2 rounded-full">⬇️</button>
+          </div>
+
+          <div className="bg-gray-100 p-4 rounded-lg mb-5">
+            <label className="block text-sm text-gray-600 mb-1">Select a token</label>
             <select 
-              className="bg-transparent outline-none font-bold" 
-              onChange={(e) => setTokenA(e.target.value)}
-              value={tokenA}
+              className="w-full p-2 rounded-lg outline-none" 
+              onChange={(e) => setTokenB(e.target.value)}
+              value={tokenB}
             >
-              <option>ETH</option>
+              <option>Select a token</option>
               <option>BTC</option>
               <option>BNB</option>
               <option>USDT</option>
             </select>
-            <input 
-              type="number" 
-              className="bg-transparent text-right w-24 outline-none" 
-              placeholder="Amount" 
-              value={amount} 
-              onChange={handleInput} 
-            />
           </div>
-        </div>
 
-        <div className="text-center mb-3">
-          <button onClick={swapTokens} className="bg-blue-500 text-white p-2 rounded-full">⬇️</button>
-        </div>
-
-        <div className="bg-gray-100 p-4 rounded-lg mb-5">
-          <label className="block text-sm text-gray-600 mb-1">Select a token</label>
-          <select 
-            className="w-full p-2 rounded-lg outline-none" 
-            onChange={(e) => setTokenB(e.target.value)}
-            value={tokenB}
+          <motion.button 
+            className="bg-blue-500 text-white w-full p-3 rounded-lg hover:bg-blue-400"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={connectWallet}
           >
-            <option>Select a token</option>
-            <option>BTC</option>
-            <option>BNB</option>
-            <option>USDT</option>
-          </select>
+            {account ? `Connected: ${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect wallet'}
+          </motion.button>
+        </motion.div>
+      ) : (
+        <div className="text-lg font-bold">
+          Please connect your wallet to access swap functionality.
         </div>
+      )}
 
-        <motion.button 
-          className="bg-blue-500 text-white w-full p-3 rounded-lg hover:bg-blue-400"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={connectWallet}
-        >
-          {account ? `Connected: ${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect wallet'}
-        </motion.button>
-      </motion.div>
-
+      {/* Banner */}
       <motion.div 
         className="mt-10 bg-black text-white p-4 rounded-lg shadow-lg max-w-md w-full"
         initial={{ opacity: 0, y: 20 }}
@@ -138,7 +149,7 @@ export default function Swap() {
 
       {/* Inline CSS global using styled-jsx */}
       <style jsx global>{`
-        /* Container & Layout */
+        /* Layout */
         .min-h-screen { min-height: 100vh; }
         .flex { display: flex; }
         .flex-col { flex-direction: column; }
