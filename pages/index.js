@@ -5,6 +5,7 @@ import Web3 from 'web3';
 export default function Swap() {
   const [amount, setAmount] = useState('');
   const [account, setAccount] = useState(null);
+  const [balance, setBalance] = useState('');
   const [tokenA, setTokenA] = useState('ETH');
   const [tokenB, setTokenB] = useState('Select a token');
 
@@ -16,10 +17,26 @@ export default function Swap() {
     if (window.ethereum) {
       const web3 = new Web3(window.ethereum);
       try {
+        // Thêm Chain Monad Testnet nếu chưa có
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x505',
+            chainName: 'Monad Testnet',
+            nativeCurrency: { name: 'tMON', symbol: 'tMON', decimals: 18 },
+            rpcUrls: ['https://rpc.testnet.monad.xyz'],
+            blockExplorerUrls: ['https://explorer.testnet.monad.xyz']
+          }]
+        });
+        // Yêu cầu kết nối ví
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         setAccount(accounts[0]);
+        // Đọc số dư của ví
+        const balanceInWei = await web3.eth.getBalance(accounts[0]);
+        const balanceEther = web3.utils.fromWei(balanceInWei, 'ether');
+        setBalance(balanceEther);
       } catch (error) {
-        console.error("User denied account access");
+        console.error("User denied account access or error occurred", error);
       }
     } else {
       alert("Please install MetaMask!");
@@ -44,6 +61,12 @@ export default function Swap() {
           {account ? `Connected: ${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect wallet'}
         </motion.button>
       </div>
+
+      {account && (
+        <div className="mb-5 text-lg font-bold">
+          Balance: {balance} tMON
+        </div>
+      )}
 
       <motion.div 
         className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full relative"
