@@ -26,6 +26,11 @@ export default function Swap() {
     }
   };
 
+  const swapTokens = () => {
+    setTokenA(tokenB);
+    setTokenB(tokenA);
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center bg-gradient-to-b from-blue-50 to-white p-10">
       <div className="w-full max-w-6xl flex justify-between items-center mb-10">
@@ -49,7 +54,16 @@ export default function Swap() {
         <div className="bg-gray-100 p-4 rounded-lg mb-3">
           <label className="block text-sm text-gray-600 mb-1">You pay</label>
           <div className="flex justify-between items-center">
-            <span className="font-bold">{tokenA}</span>
+            <select 
+              className="bg-transparent outline-none font-bold" 
+              onChange={(e) => setTokenA(e.target.value)}
+              value={tokenA}
+            >
+              <option>ETH</option>
+              <option>BTC</option>
+              <option>BNB</option>
+              <option>USDT</option>
+            </select>
             <input 
               type="number" 
               className="bg-transparent text-right w-24 outline-none" 
@@ -61,7 +75,7 @@ export default function Swap() {
         </div>
 
         <div className="text-center mb-3">
-          ⬇️
+          <button onClick={swapTokens} className="bg-blue-500 text-white p-2 rounded-full">⬇️</button>
         </div>
 
         <div className="bg-gray-100 p-4 rounded-lg mb-5">
@@ -69,6 +83,7 @@ export default function Swap() {
           <select 
             className="w-full p-2 rounded-lg outline-none" 
             onChange={(e) => setTokenB(e.target.value)}
+            value={tokenB}
           >
             <option>Select a token</option>
             <option>BTC</option>
