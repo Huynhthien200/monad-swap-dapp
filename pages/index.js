@@ -3,28 +3,47 @@ import { motion } from 'framer-motion';
 import Web3 from 'web3';
 
 const MONAD_TESTNET_PARAMS = {
-  chainId: '0x279F', // 10143 ở dạng hex
+  chainId: '0x279F',
   chainName: 'Monad Testnet',
   nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
   rpcUrls: ['https://testnet-rpc.monad.xyz/'],
   blockExplorerUrls: ['https://testnet.monadexplorer.com/'],
 };
 
+const SWAP_CONTRACT_ADDRESS = '0x083978Dd12842779e907472A331314190730a5Bf'; // Địa chỉ contract PDC
+const SWAP_CONTRACT_ABI = [
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "amountIn", "type": "uint256" },
+      { "name": "tokenIn", "type": "address" },
+      { "name": "tokenOut", "type": "address" }
+    ],
+    "name": "swap",
+    "outputs": [],
+    "type": "function"
+  }
+];
+
+const getTokenList = () => [
+  {
+    name: "PurpleDuck",
+    symbol: "PDC",
+    address: "0x083978Dd12842779e907472A331314190730a5Bf",
+    decimals: 18,
+    chainId: 10143,
+    logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/08a10a45-3c84-4b21-b202-53b952780b39.webp"
+  }
+];
+
 export default function Swap() {
   const [amount, setAmount] = useState('');
   const [account, setAccount] = useState(null);
   const [balance, setBalance] = useState('');
-  const [availableTokens, setAvailableTokens] = useState([]);
-  const [selectedToken, setSelectedToken] = useState('');
-  const [tokenB, setTokenB] = useState('Select a token');
+  const [selectedToken, setSelectedToken] = useState('MON');
+  const [tokenB, setTokenB] = useState('PDC');
   const [loading, setLoading] = useState(false);
   const [web3, setWeb3] = useState(null);
-
-  const tokenList = [
-    { symbol: 'BTC', address: '0xBTCADDRESS', isNative: false },
-    { symbol: 'BNB', address: '0xBNBADDRESS', isNative: false },
-    { symbol: 'USDT', address: '0xUSDTADDRESS', isNative: false },
-  ];
 
   useEffect(() => {
     if (window.ethereum) {
@@ -68,6 +87,27 @@ export default function Swap() {
     setBalance(web3.utils.fromWei(balanceWei, 'ether'));
   };
 
+  const swapTokens = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      alert('Please enter a valid amount.');
+      return;
+    }
+
+    setLoading(true);
+    const swapContract = new web3.eth.Contract(SWAP_CONTRACT_ABI, SWAP_CONTRACT_ADDRESS);
+    const amountInWei = web3.utils.toWei(amount, 'ether');
+    
+    try {
+      await swapContract.methods.swap(amountInWei, selectedToken, tokenB).send({ from: account });
+      alert('Swap successful!');
+      fetchBalance(account);
+    } catch (error) {
+      console.error('Swap failed', error);
+      alert('Swap failed.');
+    }
+    setLoading(false);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(to bottom, #ebf8ff, white)', padding: '24px' }}>
       <div style={{ width: '100%', maxWidth: '400px', backgroundColor: 'white', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', borderRadius: '16px', padding: '24px' }}>
@@ -83,21 +123,6 @@ export default function Swap() {
           </motion.button>
         </div>
         <p style={{ textAlign: 'center', fontSize: '14px', color: '#4b5563' }}>Balance: {balance} MON</p>
-        <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '14px', color: '#4b5563' }}>You pay</label>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <input type="number" style={{ backgroundColor: 'transparent', textAlign: 'right', width: '100%', outline: 'none', border: 'none' }} placeholder="Amount" value={amount} onChange={handleInput} />
-          </div>
-        </div>
-        <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-          <button style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px', borderRadius: '50%', border: 'none', cursor: 'pointer' }}>⬇️ Swap</button>
-        </div>
-        <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px' }}>
-          <label style={{ display: 'block', fontSize: '14px', color: '#4b5563' }}>You receive</label>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>{tokenB}</span>
-          </div>
-        </div>
       </div>
     </div>
   );
