@@ -1,359 +1,575 @@
 import { useState, useEffect } from 'react';
 import Web3 from 'web3';
 import { motion } from 'framer-motion';
-import { FiArrowDown, FiSun, FiMoon, FiRepeat } from 'react-icons/fi';
+import { FiArrowDown, FiSettings, FiRepeat } from 'react-icons/fi';
+import { IoIosArrowDown } from 'react-icons/io';
 
-// Cấu hình mạng lưới
-const MONAD_TESTNET_PARAMS = {
-  chainId: '0x279F',
-  chainName: 'Monad Testnet',
-  nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
-  rpcUrls: ['https://testnet-rpc.monad.xyz/'],
-  blockExplorerUrls: ['https://testnet.monadexplorer.com/'],
+const TOKEN_LIST = {
+  "name": "PurpleDuck Token List",
+  "logoURI": "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/08a10a45-3c84-4b21-b202-53b952780b39.webp",
+  "tokens": [
+    {
+      "chainId": 10143,
+      "address": "0x083978Dd12842779e907472A331314190730a5Bf",
+      "symbol": "PDC",
+      "name": "PurpleDuck",
+      "decimals": 18,
+      "logoURI": "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/08a10a45-3c84-4b21-b202-53b952780b39.webp"
+    },
+    {
+      "chainId": 10143,
+      "address": "0xNative",
+      "symbol": "MON",
+      "name": "Monad",
+      "decimals": 18,
+      "logoURI": "https://example.com/monad-logo.png"
+    }
+  ]
 };
 
-// Danh sách token mẫu
-const TOKEN_LIST = [
-  {
-    chainId: 10143,
-    address: "0x083978Dd12842779e907472A331314190730a5Bf",
-    symbol: "PDC",
-    name: "PurpleDuck",
-    decimals: 18,
-    logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/main/08a10a45-3c84-4b21-b202-53b952780b39.webp"
-  },
-  {
-    chainId: 10143,
-    address: "0xNative",
-    symbol: "MON",
-    name: "Monad",
-    decimals: 18,
-    logoURI: "https://example.com/monad-logo.png"
-  }
-];
-
-// Cấu hình swap
-const SWAP_ROUTER_ADDRESS = "0xYourRouterAddress";
-const ERC20_ABI = [/* Thêm ABI ERC20 thực tế */];
-const SWAP_ROUTER_ABI = [/* Thêm ABI Router thực tế */];
-
-export default function Swap() {
+const SwapInterface = () => {
+  const [darkMode, setDarkMode] = useState(true);
+  const [inputToken, setInputToken] = useState(TOKEN_LIST.tokens[1]);
+  const [outputToken, setOutputToken] = useState(TOKEN_LIST.tokens[0]);
+  const [inputAmount, setInputAmount] = useState('');
+  const [outputAmount, setOutputAmount] = useState('');
+  const [slippage, setSlippage] = useState(0.5);
+  const [showSettings, setShowSettings] = useState(false);
+  const [priceImpact, setPriceImpact] = useState(1.2);
+  const [gasFee, setGasFee] = useState(0.0034);
+  const [balances, setBalances] = useState({});
   const [web3, setWeb3] = useState(null);
   const [account, setAccount] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
-  const [inputToken, setInputToken] = useState(TOKEN_LIST[1]);
-  const [outputToken, setOutputToken] = useState(TOKEN_LIST[0]);
-  const [amount, setAmount] = useState('');
-  const [outputAmount, setOutputAmount] = useState('');
-  const [slippage, setSlippage] = useState(1.0);
-  const [priceImpact, setPriceImpact] = useState(0.0);
-  const [loading, setLoading] = useState(false);
-  const [balance, setBalance] = useState(0);
+
+  // Theme configuration
+  const theme = {
+    dark: {
+      bg: '#191B1F',
+      container: '#1F2128',
+      inputBg: '#2C2F36',
+      textPrimary: '#FFFFFF',
+      textSecondary: '#6C7284',
+      accent: '#2172E5',
+      border: '#40444F'
+    },
+    light: {
+      bg: '#FFFFFF',
+      container: '#F7F8FA',
+      inputBg: '#EDEEF2',
+      textPrimary: '#000000',
+      textSecondary: '#888D9B',
+      accent: '#007AFF',
+      border: '#E0E0E0'
+    }
+  };
 
   useEffect(() => {
     const initWeb3 = async () => {
       if (window.ethereum) {
         const web3Instance = new Web3(window.ethereum);
         setWeb3(web3Instance);
-        
-        window.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.ethereum.on('chainChanged', handleChainChanged);
-        
-        await checkNetwork();
-        await loadAccountData(web3Instance);
+        await loadAccount(web3Instance);
       }
     };
     initWeb3();
-    return () => window.ethereum?.removeAllListeners();
   }, []);
 
-  const checkNetwork = async () => {
-    const chainId = await web3?.eth.getChainId();
-    if (chainId !== parseInt(MONAD_TESTNET_PARAMS.chainId, 16)) {
-      await switchNetwork();
-    }
-  };
-
-  const switchNetwork = async () => {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: MONAD_TESTNET_PARAMS.chainId }],
-      });
-    } catch (error) {
-      if (error.code === 4902) {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [MONAD_TESTNET_PARAMS],
-        });
-      }
-    }
-  };
-
-  const loadAccountData = async (web3) => {
+  const loadAccount = async (web3) => {
     const accounts = await web3.eth.getAccounts();
     if (accounts.length > 0) {
       setAccount(accounts[0]);
-      await fetchBalance(accounts[0]);
+      await fetchBalances(accounts[0]);
     }
   };
 
-  const fetchBalance = async (account) => {
-    if (inputToken.address === "0xNative") {
-      const balance = await web3.eth.getBalance(account);
-      setBalance(web3.utils.fromWei(balance));
-    } else {
-      const contract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
-      const balance = await contract.methods.balanceOf(account).call();
-      setBalance(web3.utils.fromWei(balance));
+  const fetchBalances = async (account) => {
+    const newBalances = {};
+    for (const token of TOKEN_LIST.tokens) {
+      if (token.address === '0xNative') {
+        const balance = await web3.eth.getBalance(account);
+        newBalances[token.symbol] = web3.utils.fromWei(balance);
+      } else {
+        const contract = new web3.eth.Contract(ERC20_ABI, token.address);
+        const balance = await contract.methods.balanceOf(account).call();
+        newBalances[token.symbol] = web3.utils.fromWei(balance);
+      }
     }
+    setBalances(newBalances);
   };
 
-  const handleAccountsChanged = (accounts) => {
-    setAccount(accounts[0] || null);
-    if (accounts[0]) loadAccountData(web3);
-  };
-
-  const handleChainChanged = () => window.location.reload();
-
-  const connectWallet = async () => {
-    if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
-    await checkNetwork();
-    const accounts = await web3.eth.requestAccounts();
-    setAccount(accounts[0]);
+  const handleImageError = (e) => {
+    e.target.src = 'https://via.placeholder.com/32';
   };
 
   const switchTokens = () => {
-    [inputToken, outputToken] = [outputToken, inputToken];
-    setInputToken(inputToken);
-    setOutputToken(outputToken);
-    calculateSwapRate();
+    const temp = inputToken;
+    setInputToken(outputToken);
+    setOutputToken(temp);
   };
 
   const calculateSwapRate = async () => {
-    if (!amount || isNaN(amount)) return;
-    
-    // Tạm thời sử dụng tỷ giá cố định 1:1.5
-    const rate = inputToken.symbol === "MON" ? 1.5 : 1/1.5;
-    setOutputAmount((amount * rate).toFixed(4));
-    setPriceImpact((Math.random() * 2).toFixed(2));
+    // Implement actual swap rate calculation
+    const mockRate = 1.5;
+    setOutputAmount((inputAmount * mockRate).toFixed(4));
   };
 
   const handleSwap = async () => {
-    if (!validateInputs()) return;
-
+    if (!validateInput()) return;
+    
     try {
-      setLoading(true);
-      
-      if (inputToken.address !== "0xNative") {
+      if (inputToken.address !== '0xNative') {
         await approveToken();
       }
-
-      const txReceipt = await executeSwap();
-      handleSuccess(txReceipt);
+      await executeSwap();
+      await fetchBalances(account);
     } catch (error) {
-      handleError(error);
-    } finally {
-      setLoading(false);
+      console.error('Swap error:', error);
     }
   };
 
-  const validateInputs = () => {
-    if (!account) {
-      alert("Vui lòng kết nối ví!");
-      return false;
-    }
-    if (amount <= 0 || amount > balance) {
-      alert("Số lượng không hợp lệ!");
-      return false;
-    }
-    return true;
+  const validateInput = () => {
+    return inputAmount > 0 && inputAmount <= balances[inputToken.symbol];
   };
 
-  const approveToken = async () => {
-    const contract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
-    await contract.methods
-      .approve(SWAP_ROUTER_ADDRESS, web3.utils.toWei(amount))
-      .send({ from: account });
-  };
-
-  const executeSwap = async () => {
-    const contract = new web3.eth.Contract(SWAP_ROUTER_ABI, SWAP_ROUTER_ADDRESS);
-    const value = inputToken.address === "0xNative" 
-      ? web3.utils.toWei(amount) 
-      : "0";
-
-    return await contract.methods
-      .swapExactTokensForTokens(
-        web3.utils.toWei(amount),
-        web3.utils.toWei(outputAmount * (1 - slippage/100)),
-        [inputToken.address, outputToken.address],
-        account,
-        Math.floor(Date.now() / 1000) + 600
-      )
-      .send({ from: account, value });
-  };
-
-  const handleSuccess = (receipt) => {
-    alert(`Swap thành công! TX Hash: ${receipt.transactionHash}`);
-    fetchBalance(account);
-    setAmount('');
-  };
-
-  const handleError = (error) => {
-    console.error("Swap error:", error);
-    alert(`Lỗi: ${error.message}`);
-  };
+  const currentTheme = darkMode ? theme.dark : theme.light;
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-      <div className={`w-full max-w-md p-6 rounded-xl shadow-lg ${
-        darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
-      }`}>
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Monad Swap</h1>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`p-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}
-          >
-            {darkMode ? <FiSun /> : <FiMoon />}
-          </button>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: currentTheme.bg,
+      transition: 'all 0.3s ease'
+    }}>
+      <div style={{
+        width: '420px',
+        backgroundColor: currentTheme.container,
+        borderRadius: '24px',
+        padding: '24px',
+        boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
+        border: `1px solid ${currentTheme.border}`
+      }}>
+        {/* Header Section */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}>
+          <h2 style={{ 
+            color: currentTheme.textPrimary,
+            fontSize: '20px',
+            fontWeight: '600'
+          }}>
+            Monad Swap
+          </h2>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <FiSettings 
+              style={{ 
+                color: currentTheme.textSecondary,
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowSettings(!showSettings)}
+            />
+          </div>
         </div>
 
         {/* Input Section */}
-        <div className="mb-4">
-          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-            <div className="flex justify-between items-center mb-2">
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.0"
-                className={`w-full text-2xl bg-transparent outline-none ${darkMode ? 'text-white' : 'text-gray-900'}`}
-              />
-              <TokenSelector 
-                token={inputToken} 
-                onSelect={setInputToken} 
-                darkMode={darkMode} 
-              />
-            </div>
-            <div className="text-sm text-gray-500">
-              Balance: {parseFloat(balance).toFixed(4)} {inputToken.symbol}
-            </div>
-          </div>
-        </div>
+        <TokenInput
+          theme={currentTheme}
+          token={inputToken}
+          amount={inputAmount}
+          balance={balances[inputToken.symbol] || 0}
+          onAmountChange={setInputAmount}
+          onTokenSelect={setInputToken}
+          onImageError={handleImageError}
+        />
 
         {/* Switch Button */}
-        <div className="flex justify-center my-2">
-          <button
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          margin: '12px 0',
+          position: 'relative'
+        }}>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            style={{
+              background: currentTheme.container,
+              border: `2px solid ${currentTheme.border}`,
+              borderRadius: '12px',
+              padding: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
             onClick={switchTokens}
-            className={`p-2 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}
           >
-            <FiRepeat className={`${darkMode ? 'text-white' : 'text-gray-900'}`} />
-          </button>
+            <FiRepeat style={{ 
+              color: currentTheme.textSecondary,
+              fontSize: '20px'
+            }}/>
+          </motion.button>
         </div>
 
         {/* Output Section */}
-        <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} mb-6`}>
-          <div className="flex justify-between items-center">
-            <input
-              value={outputAmount}
-              readOnly
-              placeholder="0.0"
-              className={`w-full text-2xl bg-transparent outline-none ${darkMode ? 'text-white' : 'text-gray-900'}`}
-            />
-            <TokenSelector 
-              token={outputToken} 
-              onSelect={setOutputToken} 
-              darkMode={darkMode} 
-            />
-          </div>
-        </div>
+        <TokenInput
+          theme={currentTheme}
+          token={outputToken}
+          amount={outputAmount}
+          balance={balances[outputToken.symbol] || 0}
+          readOnly
+          onTokenSelect={setOutputToken}
+          onImageError={handleImageError}
+        />
 
-        {/* Swap Details */}
-        <div className={`p-4 rounded-lg mb-6 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-          <div className="flex justify-between mb-2">
-            <span>Tỷ giá:</span>
-            <span>1 {inputToken.symbol} ≈ {(outputAmount / amount || 0).toFixed(4)} {outputToken.symbol}</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span>Price Impact:</span>
-            <span>{priceImpact}%</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Slippage:</span>
-            <input
-              type="number"
-              value={slippage}
-              onChange={(e) => setSlippage(e.target.value)}
-              className={`w-20 bg-transparent text-right ${darkMode ? 'text-white' : 'text-gray-900'}`}
-            />
-          </div>
-        </div>
+        {/* Swap Info */}
+        <SwapInfo 
+          theme={currentTheme} 
+          inputToken={inputToken}
+          outputToken={outputToken}
+          priceImpact={priceImpact}
+          gasFee={gasFee}
+        />
 
-        {/* Swap Button */}
+        {/* Connect/Swap Button */}
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={account ? handleSwap : connectWallet}
-          disabled={loading}
-          className={`w-full py-4 rounded-xl font-bold ${
-            loading ? 'bg-gray-500' : 'bg-purple-600 hover:bg-purple-700'
-          } text-white`}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          style={{
+            width: '100%',
+            padding: '16px',
+            background: currentTheme.accent,
+            color: '#FFFFFF',
+            borderRadius: '12px',
+            border: 'none',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onClick={account ? handleSwap : () => web3.eth.requestAccounts()}
         >
-          {loading ? (
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            </div>
-          ) : account ? (
-            `Swap ${inputToken.symbol} → ${outputToken.symbol}`
-          ) : (
-            'Kết nối Ví'
-          )}
+          {account ? `Swap ${inputToken.symbol} → ${outputToken.symbol}` : 'Connect Wallet'}
         </motion.button>
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <SettingsModal
+            theme={currentTheme}
+            slippage={slippage}
+            setSlippage={setSlippage}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
       </div>
     </div>
   );
-}
+};
 
-const TokenSelector = ({ token, onSelect, darkMode }) => {
+const TokenInput = ({ theme, token, amount, balance, readOnly, onAmountChange, onTokenSelect, onImageError }) => (
+  <div style={{
+    backgroundColor: theme.inputBg,
+    borderRadius: '16px',
+    padding: '16px',
+    marginBottom: '12px'
+  }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '8px'
+    }}>
+      <input
+        type="number"
+        placeholder="0.0"
+        value={amount}
+        readOnly={readOnly}
+        onChange={(e) => onAmountChange?.(e.target.value)}
+        style={{
+          flex: 1,
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          fontSize: '24px',
+          color: theme.textPrimary,
+          fontWeight: '500'
+        }}
+      />
+      <TokenSelector 
+        token={token}
+        theme={theme}
+        onSelect={onTokenSelect}
+        onImageError={onImageError}
+      />
+    </div>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }}>
+      <span style={{ 
+        color: theme.textSecondary,
+        fontSize: '14px'
+      }}>
+        Balance: {parseFloat(balance).toFixed(4)}
+      </span>
+      {!readOnly && (
+        <button
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: theme.accent,
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
+          onClick={() => onAmountChange?.(balance)}
+        >
+          Max
+        </button>
+      )}
+    </div>
+  </div>
+);
+
+const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="relative">
+    <div style={{ position: 'relative' }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center space-x-2 px-3 py-2 rounded-lg ${
-          darkMode ? 'bg-gray-600' : 'bg-gray-200'
-        }`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: theme.inputBg,
+          padding: '8px 12px',
+          borderRadius: '12px',
+          border: 'none',
+          cursor: 'pointer'
+        }}
       >
-        <img src={token.logoURI} className="w-6 h-6 rounded-full" />
-        <span>{token.symbol}</span>
-        <FiArrowDown className={`transform ${isOpen ? 'rotate-180' : ''}`} />
+        <img
+          src={token.logoURI}
+          onError={onImageError}
+          style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%'
+          }}
+          alt={token.symbol}
+        />
+        <span style={{ 
+          color: theme.textPrimary,
+          fontWeight: '500'
+        }}>
+          {token.symbol}
+        </span>
+        <IoIosArrowDown style={{ 
+          color: theme.textSecondary,
+          fontSize: '16px'
+        }}/>
       </button>
 
       {isOpen && (
-        <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-xl z-10 ${
-          darkMode ? 'bg-gray-700' : 'bg-white'
-        }`}>
-          {TOKEN_LIST.map((t) => (
-            <button
-              key={t.address}
-              onClick={() => {
-                onSelect(t);
-                setIsOpen(false);
-              }}
-              className={`w-full px-4 py-3 text-left flex items-center space-x-2 hover:bg-opacity-10 ${
-                darkMode ? 'hover:bg-white' : 'hover:bg-gray-100'
-              }`}
-            >
-              <img src={t.logoURI} className="w-6 h-6 rounded-full" />
-              <span>{t.symbol}</span>
-            </button>
-          ))}
+        <div style={{
+          position: 'absolute',
+          right: 0,
+          top: '100%',
+          marginTop: '8px',
+          background: theme.container,
+          borderRadius: '16px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          width: '280px',
+          zIndex: 100
+        }}>
+          <div style={{
+            padding: '12px',
+            maxHeight: '300px',
+            overflowY: 'auto'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '12px',
+              marginBottom: '8px'
+            }}>
+              <img
+                src={TOKEN_LIST.logoURI}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  marginRight: '12px'
+                }}
+                alt="Token List Logo"
+                onError={onImageError}
+              />
+              <span style={{
+                color: theme.textPrimary,
+                fontWeight: '600'
+              }}>
+                {TOKEN_LIST.name}
+              </span>
+            </div>
+            
+            {TOKEN_LIST.tokens.map((t) => (
+              <div
+                key={t.address}
+                onClick={() => {
+                  onSelect(t);
+                  setIsOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px',
+                  cursor: 'pointer',
+                  borderRadius: '12px',
+                  ':hover': {
+                    background: theme.inputBg
+                  }
+                }}
+              >
+                <img
+                  src={t.logoURI}
+                  onError={onImageError}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    marginRight: '12px'
+                  }}
+                  alt={t.symbol}
+                />
+                <div>
+                  <div style={{ 
+                    color: theme.textPrimary,
+                    fontWeight: '500'
+                  }}>
+                    {t.name}
+                  </div>
+                  <div style={{ 
+                    color: theme.textSecondary,
+                    fontSize: '14px'
+                  }}>
+                    {t.symbol}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 };
+
+const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, gasFee }) => (
+  <div style={{
+    borderTop: `1px solid ${theme.border}`,
+    paddingTop: '16px',
+    marginBottom: '24px'
+  }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: '8px'
+    }}>
+      <span style={{ color: theme.textSecondary }}>Tỷ giá</span>
+      <span style={{ color: theme.textPrimary }}>
+        1 {inputToken.symbol} ≈ 1.5 {outputToken.symbol}
+      </span>
+    </div>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: '8px'
+    }}>
+      <span style={{ color: theme.textSecondary }}>Price Impact</span>
+      <span style={{ color: priceImpact > 2 ? '#FF3B3B' : theme.textPrimary }}>
+        {priceImpact}%
+      </span>
+    </div>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between'
+    }}>
+      <span style={{ color: theme.textSecondary }}>Phí ước tính</span>
+      <span style={{ color: theme.textPrimary }}>
+        ${gasFee}
+      </span>
+    </div>
+  </div>
+);
+
+const SettingsModal = ({ theme, slippage, setSlippage, onClose }) => (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000
+  }}>
+    <div style={{
+      background: theme.container,
+      padding: '24px',
+      borderRadius: '16px',
+      width: '400px'
+    }}>
+      <h3 style={{
+        color: theme.textPrimary,
+        marginBottom: '20px'
+      }}>
+        Cài đặt giao dịch
+      </h3>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{
+          display: 'block',
+          color: theme.textSecondary,
+          marginBottom: '8px'
+        }}>
+          Dung sai trượt giá (%)
+        </label>
+        <input
+          type="number"
+          value={slippage}
+          onChange={(e) => setSlippage(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: theme.inputBg,
+            border: `1px solid ${theme.border}`,
+            borderRadius: '8px',
+            color: theme.textPrimary
+          }}
+        />
+      </div>
+      <button
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: theme.accent,
+          color: '#FFFFFF',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer'
+        }}
+        onClick={onClose}
+      >
+        Lưu cài đặt
+      </button>
+    </div>
+  </div>
+);
+
+export default SwapInterface;
