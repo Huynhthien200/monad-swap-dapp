@@ -412,40 +412,81 @@ const SwapInterface = () => {
   useEffect(() => {
     const initWeb3 = async () => {
       if (window.ethereum) {
-        const web3Instance = new Web3(window.ethereum);
-        setWeb3(web3Instance);
-        
         try {
-          await window.ethereum.request({ method: 'eth_requestAccounts' });
-          const accounts = await web3Instance.eth.getAccounts();
-          setAccount(accounts[0]);
-          await fetchBalances(accounts[0]);
+          const web3Instance = new Web3(window.ethereum);
+          setWeb3(web3Instance);
+          await checkNetwork(web3Instance);
+          await loadAccount(web3Instance);
         } catch (error) {
-          console.error('Error connecting to wallet:', error);
+          console.error('Lỗi khởi tạo Web3:', error);
+          alert('Không thể kết nối với MetaMask');
         }
+      } else {
+        alert('Vui lòng cài đặt MetaMask!');
       }
     };
     
     initWeb3();
+    return () => window.ethereum?.removeAllListeners();
   }, []);
 
-  const fetchBalances = async (account) => {
-    const newBalances = {};
-    for (const token of TOKEN_LIST.tokens) {
-      try {
-        if (token.address === '0xNative') {
-          const balance = await web3.eth.getBalance(account);
-          newBalances[token.symbol] = web3.utils.fromWei(balance);
-        } else {
-          const contract = new web3.eth.Contract(ERC20_ABI, token.address);
-          const balance = await contract.methods.balanceOf(account).call();
-          newBalances[token.symbol] = web3.utils.fromWei(balance);
-        }
-      } catch (error) {
-        console.error(`Error fetching ${token.symbol} balance:`, error);
+  const checkNetwork = async (web3) => {
+    try {
+      const chainId = await web3.eth.getChainId();
+      if (chainId !== parseInt(MONAD_TESTNET_PARAMS.chainId, 16)) {
+        await switchNetwork();
+      }
+    } catch (error) {
+      console.error('Lỗi kiểm tra mạng:', error);
+    }
+  };
+
+  const switchNetwork = async () => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: MONAD_TESTNET_PARAMS.chainId }],
+      });
+    } catch (error) {
+      if (error.code === 4902) {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [MONAD_TESTNET_PARAMS],
+        });
       }
     }
-    setBalances(newBalances);
+  };
+
+  const loadAccount = async (web3) => {
+    try {
+      const accounts = await web3.eth.getAccounts();
+      if (accounts.length > 0) {
+        setAccount(accounts[0]);
+        await fetchBalances(accounts[0]);
+      }
+    } catch (error) {
+      console.error('Lỗi tải tài khoản:', error);
+    }
+  };
+
+  const fetchBalances = async (account) => {
+    try {
+      const newBalances = {};
+      
+      // Native token balance
+      const nativeBalance = await web3.eth.getBalance(account);
+      newBalances.MON = web3.utils.fromWei(nativeBalance);
+
+      // PDC token balance
+      const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
+      const pdcBalance = await pdcContract.methods.balanceOf(account).call();
+      const pdcDecimals = await pdcContract.methods.decimals().call();
+      newBalances.PDC = (pdcBalance / (10 ** pdcDecimals)).toFixed(4);
+
+      setBalances(newBalances);
+    } catch (error) {
+      console.error('Lỗi lấy số dư:', error);
+    }
   };
 
   const handleImageError = (e) => {
@@ -456,20 +497,24 @@ const SwapInterface = () => {
     const temp = inputToken;
     setInputToken(outputToken);
     setOutputToken(temp);
+    setInputAmount('');
+    setOutputAmount('');
+  };
+
+  const calculateSwapRate = async () => {
+    if (!inputAmount || isNaN(inputAmount)) return;
+    
+    // Giả lập tỷ giá 1:1.5
+    const rate = inputToken.symbol === "MON" ? 1.5 : 1/1.5;
+    setOutputAmount((inputAmount * rate).toFixed(4));
+    setPriceImpact((Math.random() * 2).toFixed(2));
   };
 
   const handleSwap = async () => {
-    if (!account) {
-      alert('Vui lòng kết nối ví!');
-      return;
-    }
-    if (!inputAmount || inputAmount <= 0) {
-      alert('Vui lòng nhập số lượng hợp lệ');
-      return;
-    }
+    if (!validateInput()) return;
     
-    setLoading(true);
     try {
+      setLoading(true);
       // Giả lập quá trình swap
       await new Promise(resolve => setTimeout(resolve, 2000));
       alert('Swap thành công!');
@@ -483,6 +528,22 @@ const SwapInterface = () => {
     }
   };
 
+  const validateInput = () => {
+    if (!account) {
+      alert('Vui lòng kết nối ví!');
+      return false;
+    }
+    if (inputAmount <= 0 || isNaN(inputAmount)) {
+      alert('Số lượng không hợp lệ!');
+      return false;
+    }
+    if (parseFloat(inputAmount) > parseFloat(balances[inputToken.symbol] || 0)) {
+      alert('Số dư không đủ!');
+      return false;
+    }
+    return true;
+  };
+
   const currentTheme = darkMode ? theme.dark : theme.light;
 
   return (
@@ -492,7 +553,8 @@ const SwapInterface = () => {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: currentTheme.bg,
-      transition: 'all 0.3s ease'
+      transition: 'all 0.3s ease',
+      fontFamily: 'Arial, sans-serif'
     }}>
       <div style={{
         width: '420px',
@@ -502,106 +564,28 @@ const SwapInterface = () => {
         boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
         border: `1px solid ${currentTheme.border}`
       }}>
+        {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '20px'
         }}>
-          <h2 style={{ 
+          <h1 style={{ 
             color: currentTheme.textPrimary,
-            fontSize: '20px',
-            fontWeight: '600'
+            fontSize: '24px',
+            fontWeight: 'bold'
           }}>
             Monad Swap
-          </h2>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <FiSettings 
-              style={{ 
-                color: currentTheme.textSecondary,
-                cursor: 'pointer'
-              }}
-              onClick={() => setShowSettings(!showSettings)}
-            />
-          </div>
-        </div>
-
-        <TokenInput
-          theme={currentTheme}
-          token={inputToken}
-          amount={inputAmount}
-          balance={balances[inputToken.symbol]}
-          onAmountChange={setInputAmount}
-          onTokenSelect={setInputToken}
-          onImageError={handleImageError}
-        />
-
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          margin: '12px 0',
-          position: 'relative'
-        }}>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          </h1>
+          <button 
+            onClick={() => setDarkMode(!darkMode)}
             style={{
-              background: currentTheme.container,
-              border: `2px solid ${currentTheme.border}`,
-              borderRadius: '12px',
               padding: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              borderRadius: '8px',
+              background: currentTheme.inputBg,
+              border: `1px solid ${currentTheme.border}`,
+              cursor: 'pointer'
             }}
-            onClick={switchTokens}
           >
-            <FiRepeat style={{ 
-              color: currentTheme.textSecondary,
-              fontSize: '20px'
-            }}/>
-          </motion.button>
-        </div>
-
-        <TokenInput
-          theme={currentTheme}
-          token={outputToken}
-          amount={outputAmount}
-          balance={balances[outputToken.symbol]}
-          readOnly
-          onTokenSelect={setOutputToken}
-          onImageError={handleImageError}
-        />
-
-        <SwapInfo 
-          theme={currentTheme} 
-          inputToken={inputToken}
-          outputToken={outputToken}
-          priceImpact={priceImpact}
-          gasFee={gasFee}
-        />
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          style={{
-            width: '100%',
-            padding: '16px',
-            background: currentTheme.accent,
-            color: '#FFFFFF',
-            borderRadius: '12px',
-            border: 'none',
-            fontSize: '16px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            opacity: loading ? 0.7 : 1
-          }}
-          onClick={account ? handleSwap : () => window.ethereum?.request({ method: 'eth_requestAccounts' })}
-          disabled={loading}
-        >
-          {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{
-                width: '20px
+            {darkMode ? '🌞' :
