@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Web3 from 'web3';
 import { motion } from 'framer-motion';
 import { FiArrowDown, FiSettings, FiRepeat } from 'react-icons/fi';
 import { IoIosArrowDown } from 'react-icons/io';
 
+// -------------------- CONSTANTS --------------------
 const ERC20_ABI = [
   {
     constant: true,
@@ -76,8 +77,38 @@ const ROUTER_ABI = [
   }
 ];
 
+const PERMIT2_ABI = [{
+  "inputs": [
+    { "internalType": "address", "name": "owner", "type": "address" },
+    { "internalType": "address", "name": "spender", "type": "address" },
+    { "internalType": "uint256", "name": "value", "type": "uint256" },
+    { "internalType": "uint256", "name": "deadline", "type": "uint256" },
+    { "internalType": "uint8", "name": "v", "type": "uint8" },
+    { "internalType": "bytes32", "name": "r", "type": "bytes32" },
+    { "internalType": "bytes32", "name": "s", "type": "bytes32" }
+  ],
+  "name": "permit",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+}];
+
+const UNIVERSAL_ROUTER_ABI = [{
+  "inputs": [
+    { "internalType": "bytes", "name": "commands", "type": "bytes" },
+    { "internalType": "bytes[]", "name": "inputs", "type": "bytes[]" },
+    { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+  ],
+  "name": "execute",
+  "outputs": [],
+  "stateMutability": "payable",
+  "type": "function"
+}];
+
 const WMON_ADDRESS = '0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701';
 const UNISWAP_ROUTER_ADDRESS = '0xfb8e1c3b833f9e67a71C859a132cf783b645e436';
+const PERMIT2_ADDRESS = '0x000000000022d473030f116ddee9f6b43ac78ba3';
+const UNIVERSAL_ROUTER_ADDRESS = '0x3ae6d8a282d67893e17aa70ebffb33ee5aa65893';
 
 const MONAD_TESTNET_PARAMS = {
   chainId: '0x279F', // 10175 in decimal
@@ -118,6 +149,7 @@ const getWrappedNativeAddress = () => {
   return WMON_ADDRESS;
 };
 
+// -------------------- COMPONENTS --------------------
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -403,6 +435,7 @@ const SettingsModal = ({ theme, slippage, setSlippage, onClose }) => (
   </div>
 );
 
+// -------------------- MAIN SWAP INTERFACE --------------------
 const SwapInterface = () => {
   const [darkMode, setDarkMode] = useState(true);
   const [inputToken, setInputToken] = useState(TOKEN_LIST.tokens[1]);
@@ -418,6 +451,9 @@ const SwapInterface = () => {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
+  // Thêm state cho Permit2 & Universal Router
+  const [usePermit2, setUsePermit2] = useState(false);
+  const [useUniversalRouter, setUseUniversalRouter] = useState(false);
 
   const theme = {
     dark: {
@@ -440,6 +476,9 @@ const SwapInterface = () => {
     }
   };
 
+  const currentTheme = darkMode ? theme.dark : theme.light;
+
+  // -------------------- WALLET & NETWORK --------------------
   const connectWallet = async () => {
     if (window.ethereum) {
       setWalletLoading(true);
@@ -598,11 +637,68 @@ const SwapInterface = () => {
     setOutputAmount('');
   };
 
+  // -------------------- TÍNH NĂNG PHÉP DUYỆT & UNIVERSAL ROUTER --------------------
+  const approveWithPermit2 = async (tokenAddress, amount) => {
+    const permit2 = new web3.eth.Contract(PERMIT2_ABI, PERMIT2_ADDRESS);
+    const deadline = Math.floor(Date.now() / 1000) + 3600;
+    const nonce = await permit2.methods.nonces(account).call();
+    const message = {
+      owner: account,
+      spender: useUniversalRouter ? UNIVERSAL_ROUTER_ADDRESS : UNISWAP_ROUTER_ADDRESS,
+      value: amount,
+      nonce: nonce,
+      deadline: deadline
+    };
+    // Giả lập ký (trong thực tế cần triển khai EIP-712)
+    const signature = {
+      v: 28,
+      r: '0x'.padEnd(66, '1'),
+      s: '0x'.padEnd(66, '2')
+    };
+    await permit2.methods.permit(
+      message.owner,
+      message.spender,
+      message.value,
+      message.deadline,
+      signature.v,
+      signature.r,
+      signature.s
+    ).send({ from: account });
+  };
+
+  const executeUniversalSwap = async () => {
+    const universalRouter = new web3.eth.Contract(UNIVERSAL_ROUTER_ABI, UNIVERSAL_ROUTER_ADDRESS);
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const amountIn = web3.utils.toWei(inputAmount, 'ether');
+    const amountOutMin = web3.utils.toWei(
+      (outputAmount * (1 - slippage / 100)).toString(),
+      'ether'
+    );
+    const path = [inputToken.address, outputToken.address];
+    const commands = '0x0b'; // Lệnh swap V2
+    const inputs = web3.eth.abi.encodeParameters(
+      ['address[]', 'address', 'uint256', 'uint256'],
+      [path, account, amountIn, amountOutMin]
+    );
+    return await universalRouter.methods.execute(
+      commands,
+      [inputs],
+      deadline
+    ).send({ from: account, value: inputToken.symbol === 'MON' ? amountIn : 0 });
+  };
+
+  // -------------------- HANDLER SWAP --------------------
   const handleSwap = async () => {
     if (!validateInput() || !web3 || !account) return;
     try {
       setLoading(true);
-      const router = new web3.eth.Contract(UNISWAP_ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
+      // Nếu sử dụng Universal Router thì thực hiện theo path đó
+      if (useUniversalRouter) {
+        await executeUniversalSwap();
+        setLoading(false);
+        return;
+      }
+      const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
       const deadline = Math.floor(Date.now() / 1000) + 300;
       const amountIn = web3.utils.toWei(inputAmount, 'ether');
       const amountOutMin = web3.utils.toWei(
@@ -610,22 +706,25 @@ const SwapInterface = () => {
         'ether'
       );
       let tx;
+      // Nếu token không phải native và bật Permit2, sử dụng Permit2 để phê duyệt
+      if (inputToken.symbol !== 'MON' && usePermit2) {
+        await approveWithPermit2(inputToken.address, amountIn);
+      } else if (inputToken.symbol !== 'MON') {
+        const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
+        await tokenContract.methods.approve(UNISWAP_ROUTER_ADDRESS, amountIn).send({ from: account });
+      }
       if (inputToken.symbol === 'MON') {
-        const path = [WMON_ADDRESS, TOKEN_LIST.tokens[0].address];
+        const path = [WMON_ADDRESS, outputToken.address];
         tx = await router.methods
           .swapExactETHForTokens(amountOutMin, path, account, deadline)
           .send({ from: account, value: amountIn });
       } else if (outputToken.symbol === 'MON') {
         const path = [inputToken.address, WMON_ADDRESS];
-        const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
-        await tokenContract.methods.approve(UNISWAP_ROUTER_ADDRESS, amountIn).send({ from: account });
         tx = await router.methods
           .swapExactTokensForETH(amountIn, amountOutMin, path, account, deadline)
           .send({ from: account });
       } else {
         const path = [inputToken.address, outputToken.address];
-        const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
-        await tokenContract.methods.approve(UNISWAP_ROUTER_ADDRESS, amountIn).send({ from: account });
         tx = await router.methods
           .swapExactTokensForTokens(amountIn, amountOutMin, path, account, deadline)
           .send({ from: account });
@@ -647,7 +746,7 @@ const SwapInterface = () => {
   const calculateSwapRate = async () => {
     if (!inputAmount || !web3) return;
     try {
-      const router = new web3.eth.Contract(UNISWAP_ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
+      const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
       let path = [];
       if (inputToken.symbol === 'MON') {
         path = [WMON_ADDRESS, outputToken.address];
@@ -687,8 +786,7 @@ const SwapInterface = () => {
     return true;
   };
 
-  const currentTheme = darkMode ? theme.dark : theme.light;
-
+  // -------------------- RENDER --------------------
   return (
     <div style={{
       minHeight: '100vh',
@@ -829,6 +927,25 @@ const SwapInterface = () => {
           priceImpact={priceImpact}
           gasFee={gasFee}
         />
+        {/* Thêm các checkbox lựa chọn Permit2 và Universal Router */}
+        <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
+          <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
+            <input
+              type="checkbox"
+              checked={usePermit2}
+              onChange={(e) => setUsePermit2(e.target.checked)}
+            />
+            Sử dụng Permit2
+          </label>
+          <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
+            <input
+              type="checkbox"
+              checked={useUniversalRouter}
+              onChange={(e) => setUseUniversalRouter(e.target.checked)}
+            />
+            Sử dụng Universal Router
+          </label>
+        </div>
         <button
           onClick={handleSwap}
           disabled={loading}
