@@ -172,7 +172,7 @@ const TOKEN_LIST = {
       symbol: "MON",
       name: "Monad",
       decimals: 18,
-      logoURI: "https://example.com/monad-logo.png"
+      logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/MON.webp"
     }
   ]
 };
