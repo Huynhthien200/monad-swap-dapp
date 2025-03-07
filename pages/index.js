@@ -588,4 +588,4 @@ const SwapInterface = () => {
               cursor: 'pointer'
             }}
           >
-         //   {darkMode ? '🌞' :
+         {darkMode ? '🌞' :
