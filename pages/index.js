@@ -35,8 +35,7 @@ const MONAD_TESTNET_PARAMS = {
 };
 
 const TOKEN_LIST = {
-  name: "PurpleDuck Token List",
-  logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/main/08a10a45-3c84-4b21-b202-53b952780b39.webp",
+
   tokens: [
     {
       chainId: 10143,
@@ -152,10 +151,7 @@ const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
                   alignItems: 'center',
                   padding: '12px',
                   cursor: 'pointer',
-                  borderRadius: '12px',
-                  ':hover': {
-                    background: theme.inputBg
-                  }
+                  borderRadius: '12px'
                 }}
               >
                 <img
@@ -473,11 +469,9 @@ const SwapInterface = () => {
     try {
       const newBalances = {};
       
-      // Native token balance
       const nativeBalance = await web3.eth.getBalance(account);
       newBalances.MON = web3.utils.fromWei(nativeBalance);
 
-      // PDC token balance
       const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
       const pdcBalance = await pdcContract.methods.balanceOf(account).call();
       const pdcDecimals = await pdcContract.methods.decimals().call();
@@ -503,19 +497,15 @@ const SwapInterface = () => {
 
   const calculateSwapRate = async () => {
     if (!inputAmount || isNaN(inputAmount)) return;
-    
-    // Giả lập tỷ giá 1:1.5
-    const rate = inputToken.symbol === "MON" ? 1.5 : 1/1.5;
+    const rate = inputToken.symbol === "MON" ? 1.5 : 1 / 1.5;
     setOutputAmount((inputAmount * rate).toFixed(4));
     setPriceImpact((Math.random() * 2).toFixed(2));
   };
 
   const handleSwap = async () => {
     if (!validateInput()) return;
-    
     try {
       setLoading(true);
-      // Giả lập quá trình swap
       await new Promise(resolve => setTimeout(resolve, 2000));
       alert('Swap thành công!');
       setInputAmount('');
@@ -588,4 +578,103 @@ const SwapInterface = () => {
               cursor: 'pointer'
             }}
           >
-         {darkMode ? '🌞' :
+            {darkMode ? '🌞' : '🌜'}
+          </button>
+        </div>
+
+        {/* Swap Inputs */}
+        <TokenInput
+          theme={currentTheme}
+          token={inputToken}
+          amount={inputAmount}
+          balance={balances[inputToken.symbol]}
+          readOnly={false}
+          onAmountChange={(value) => { setInputAmount(value); calculateSwapRate(); }}
+          onTokenSelect={setInputToken}
+          onImageError={handleImageError}
+        />
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          margin: '16px 0'
+        }}>
+          <button
+            onClick={switchTokens}
+            style={{
+              background: currentTheme.inputBg,
+              border: `1px solid ${currentTheme.border}`,
+              borderRadius: '50%',
+              padding: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            <FiRepeat style={{ color: currentTheme.textPrimary }} />
+          </button>
+        </div>
+
+        <TokenInput
+          theme={currentTheme}
+          token={outputToken}
+          amount={outputAmount}
+          balance={balances[outputToken.symbol]}
+          readOnly={true}
+          onTokenSelect={setOutputToken}
+          onImageError={handleImageError}
+        />
+
+        <SwapInfo
+          theme={currentTheme}
+          inputToken={inputToken}
+          outputToken={outputToken}
+          priceImpact={priceImpact}
+          gasFee={gasFee}
+        />
+
+        <button
+          onClick={handleSwap}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: currentTheme.accent,
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold'
+          }}
+        >
+          {loading ? 'Swapping...' : 'Swap'}
+        </button>
+
+        <div style={{ marginTop: '16px', textAlign: 'center' }}>
+          <button
+            onClick={() => setShowSettings(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: currentTheme.accent,
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            <FiSettings /> Cài đặt giao dịch
+          </button>
+        </div>
+
+        {showSettings && (
+          <SettingsModal
+            theme={currentTheme}
+            slippage={slippage}
+            setSlippage={setSlippage}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SwapInterface;
