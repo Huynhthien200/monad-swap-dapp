@@ -140,7 +140,7 @@ const TOKEN_LIST = {
       symbol: "MON",
       name: "Monad",
       decimals: 18,
-      logoURI: "https://example.com/monad-logo.png"
+      logoURI: "https://github.com/Huynhthien200/file/blob/main/MON.png"
     }
   ]
 };
