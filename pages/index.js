@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { FiArrowDown, FiSettings, FiRepeat } from 'react-icons/fi';
 import { IoIosArrowDown } from 'react-icons/io';
 
-// Constants
 const ERC20_ABI = [
   {
     constant: true,
@@ -57,10 +56,8 @@ const TOKEN_LIST = {
   ]
 };
 
-// Helper Components
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
-
   return (
     <div style={{ position: 'relative' }}>
       <button
@@ -86,18 +83,11 @@ const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
           }}
           alt={token.symbol}
         />
-        <span style={{ 
-          color: theme.textPrimary,
-          fontWeight: '500'
-        }}>
+        <span style={{ color: theme.textPrimary, fontWeight: '500' }}>
           {token.symbol}
         </span>
-        <IoIosArrowDown style={{ 
-          color: theme.textSecondary,
-          fontSize: '16px'
-        }}/>
+        <IoIosArrowDown style={{ color: theme.textSecondary, fontSize: '16px' }}/>
       </button>
-
       {isOpen && (
         <div style={{
           position: 'absolute',
@@ -132,14 +122,10 @@ const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
                 alt="Token List Logo"
                 onError={onImageError}
               />
-              <span style={{
-                color: theme.textPrimary,
-                fontWeight: '600'
-              }}>
+              <span style={{ color: theme.textPrimary, fontWeight: '600' }}>
                 {TOKEN_LIST.name}
               </span>
             </div>
-            
             {TOKEN_LIST.tokens.map((t) => (
               <div
                 key={t.address}
@@ -167,16 +153,10 @@ const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
                   alt={t.symbol}
                 />
                 <div>
-                  <div style={{ 
-                    color: theme.textPrimary,
-                    fontWeight: '500'
-                  }}>
+                  <div style={{ color: theme.textPrimary, fontWeight: '500' }}>
                     {t.name}
                   </div>
-                  <div style={{ 
-                    color: theme.textSecondary,
-                    fontSize: '14px'
-                  }}>
+                  <div style={{ color: theme.textSecondary, fontSize: '14px' }}>
                     {t.symbol}
                   </div>
                 </div>
@@ -189,16 +169,7 @@ const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   );
 };
 
-const TokenInput = ({ 
-  theme, 
-  token, 
-  amount, 
-  balance, 
-  readOnly, 
-  onAmountChange, 
-  onTokenSelect, 
-  onImageError 
-}) => (
+const TokenInput = ({ theme, token, amount, balance, readOnly, onAmountChange, onTokenSelect, onImageError }) => (
   <div style={{
     backgroundColor: theme.inputBg,
     borderRadius: '16px',
@@ -239,14 +210,8 @@ const TokenInput = ({
       justifyContent: 'space-between',
       alignItems: 'center'
     }}>
-      <span style={{ 
-        color: theme.textSecondary,
-        fontSize: '14px'
-      }}>
-        Balance: {typeof balance !== 'undefined' ? 
-          parseFloat(balance).toLocaleString(undefined, {
-            maximumFractionDigits: 4
-          }) : 'Loading...'}
+      <span style={{ color: theme.textSecondary, fontSize: '14px' }}>
+        Balance: {typeof balance !== 'undefined' ? parseFloat(balance).toLocaleString(undefined, { maximumFractionDigits: 4 }) : 'Loading...'}
       </span>
       {!readOnly && (
         <button
@@ -369,7 +334,6 @@ const SettingsModal = ({ theme, slippage, setSlippage, onClose }) => (
   </div>
 );
 
-// Main Component
 const SwapInterface = () => {
   const [darkMode, setDarkMode] = useState(true);
   const [inputToken, setInputToken] = useState(TOKEN_LIST.tokens[1]);
@@ -439,10 +403,15 @@ const SwapInterface = () => {
         alert('Vui lòng cài đặt MetaMask!');
       }
     };
-    
     initWeb3();
     return () => window.ethereum?.removeAllListeners();
   }, []);
+
+  useEffect(() => {
+    if (account && web3) {
+      fetchBalances(account);
+    }
+  }, [account, web3]);
 
   const checkNetwork = async (web3) => {
     try {
@@ -575,11 +544,7 @@ const SwapInterface = () => {
           alignItems: 'center',
           marginBottom: '20px'
         }}>
-          <h1 style={{ 
-            color: currentTheme.textPrimary,
-            fontSize: '24px',
-            fontWeight: 'bold'
-          }}>
+          <h1 style={{ color: currentTheme.textPrimary, fontSize: '24px', fontWeight: 'bold' }}>
             Monad Swap
           </h1>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -622,7 +587,6 @@ const SwapInterface = () => {
             </button>
           </div>
         </div>
-
         <TokenInput
           theme={currentTheme}
           token={inputToken}
@@ -633,7 +597,6 @@ const SwapInterface = () => {
           onTokenSelect={setInputToken}
           onImageError={handleImageError}
         />
-
         <div style={{
           display: 'flex',
           justifyContent: 'center',
@@ -652,7 +615,6 @@ const SwapInterface = () => {
             <FiRepeat style={{ color: currentTheme.textPrimary }} />
           </button>
         </div>
-
         <TokenInput
           theme={currentTheme}
           token={outputToken}
@@ -662,7 +624,6 @@ const SwapInterface = () => {
           onTokenSelect={setOutputToken}
           onImageError={handleImageError}
         />
-
         <SwapInfo
           theme={currentTheme}
           inputToken={inputToken}
@@ -670,7 +631,6 @@ const SwapInterface = () => {
           priceImpact={priceImpact}
           gasFee={gasFee}
         />
-
         <button
           onClick={handleSwap}
           disabled={loading}
@@ -688,7 +648,6 @@ const SwapInterface = () => {
         >
           {loading ? 'Swapping...' : 'Swap'}
         </button>
-
         <div style={{ marginTop: '16px', textAlign: 'center' }}>
           <button
             onClick={() => setShowSettings(true)}
@@ -703,7 +662,6 @@ const SwapInterface = () => {
             <FiSettings /> Cài đặt giao dịch
           </button>
         </div>
-
         {showSettings && (
           <SettingsModal
             theme={currentTheme}
