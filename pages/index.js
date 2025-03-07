@@ -54,7 +54,7 @@ const TOKEN_LIST = {
       logoURI: "https://example.com/monad-logo.png"
     }
   ]
-];
+};
 
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
