@@ -110,6 +110,38 @@ const UNISWAP_ROUTER_ADDRESS = '0xfb8e1c3b833f9e67a71C859a132cf783b645e436';
 const PERMIT2_ADDRESS = '0x000000000022d473030f116ddee9f6b43ac78ba3';
 const UNIVERSAL_ROUTER_ADDRESS = '0x3ae6d8a282d67893e17aa70ebffb33ee5aa65893';
 
+// --- Placeholder cho Uniswap V2 Factory & Pair ABI ---
+const UNISWAP_V2_FACTORY_ADDRESS = '0xYourFactoryAddress'; // Cập nhật địa chỉ chính xác
+const UNISWAP_V2_FACTORY_ABI = [
+  {
+    "constant": true,
+    "inputs": [
+      { "internalType": "address", "name": "", "type": "address" },
+      { "internalType": "address", "name": "", "type": "address" }
+    ],
+    "name": "getPair",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+const UNISWAP_V2_PAIR_ABI = [
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getReserves",
+    "outputs": [
+      { "internalType": "uint112", "name": "_reserve0", "type": "uint112" },
+      { "internalType": "uint112", "name": "_reserve1", "type": "uint112" },
+      { "internalType": "uint32", "name": "_blockTimestampLast", "type": "uint32" }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
 const MONAD_TESTNET_PARAMS = {
   chainId: '0x279F', // 10175 in decimal
   chainName: 'Monad Testnet',
@@ -140,7 +172,7 @@ const TOKEN_LIST = {
       symbol: "MON",
       name: "Monad",
       decimals: 18,
-      logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/MON.webp"
+      logoURI: "https://example.com/monad-logo.png"
     }
   ]
 };
@@ -150,8 +182,83 @@ const getWrappedNativeAddress = () => {
 };
 
 // -------------------- COMPONENTS --------------------
+
+// Cập nhật giao diện SwapInfo với tỷ giá thực tế
+const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, exchangeRate, isLoading, gasFee }) => (
+  <div style={{
+    borderTop: `1px solid ${theme.border}`,
+    padding: '16px',
+    margin: '16px 0',
+    background: theme.container,
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+  }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '12px'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <FiArrowDown style={{ color: theme.textSecondary }}/>
+        <span style={{ color: theme.textSecondary }}>Tỷ giá</span>
+      </div>
+      {isLoading ? (
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity }}
+          style={{ display: 'inline-block' }}
+        >
+          ⏳
+        </motion.div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          <span style={{ color: theme.textPrimary, fontWeight: 500 }}>
+            1 {inputToken.symbol} = {exchangeRate} {outputToken.symbol}
+          </span>
+          <span style={{ 
+            color: priceImpact > 2 ? '#FF3B3B' : priceImpact > 1 ? '#FFA500' : '#21BF73',
+            fontSize: '12px'
+          }}>
+            (Price Impact: {priceImpact}%)
+          </span>
+        </div>
+      )}
+    </div>
+    
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: '12px',
+      marginTop: '12px'
+    }}>
+      <div style={{
+        padding: '12px',
+        background: theme.inputBg,
+        borderRadius: '8px',
+        textAlign: 'center'
+      }}>
+        <div style={{ color: theme.textSecondary, fontSize: '12px' }}>Phí giao dịch</div>
+        <div style={{ color: theme.textPrimary, fontWeight: 500 }}>${gasFee}</div>
+      </div>
+      <div style={{
+        padding: '12px',
+        background: theme.inputBg,
+        borderRadius: '8px',
+        textAlign: 'center'
+      }}>
+        <div style={{ color: theme.textSecondary, fontSize: '12px' }}>Thời gian</div>
+        <div style={{ color: theme.textPrimary, fontWeight: 500 }}>~3 phút</div>
+      </div>
+    </div>
+  </div>
+);
+
+// Cập nhật TokenSelector với khả năng tìm kiếm
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  
   return (
     <div style={{ position: 'relative' }}>
       <button
@@ -184,78 +291,77 @@ const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
       </button>
       {isOpen && (
         <div style={{
-          position: 'absolute',
-          right: 0,
-          top: '100%',
-          marginTop: '8px',
           background: theme.container,
           borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          width: '280px',
-          zIndex: 100
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          width: '320px',
+          maxHeight: '400px',
+          overflow: 'hidden'
         }}>
-          <div style={{
-            padding: '12px',
+          <div style={{ padding: '16px' }}>
+            <input
+              type="text"
+              placeholder="Tìm kiếm token..."
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: theme.inputBg,
+                border: `1px solid ${theme.border}`,
+                borderRadius: '8px',
+                color: theme.textPrimary,
+                marginBottom: '12px'
+              }}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div style={{ 
             maxHeight: '300px',
-            overflowY: 'auto'
+            overflowY: 'auto',
+            padding: '0 16px 16px'
           }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '12px',
-              marginBottom: '8px'
-            }}>
-              <img
-                src={TOKEN_LIST.logoURI}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  marginRight: '12px'
-                }}
-                alt="Token List Logo"
-                onError={onImageError}
-              />
-              <span style={{ color: theme.textPrimary, fontWeight: '600' }}>
-                {TOKEN_LIST.name}
-              </span>
-            </div>
-            {TOKEN_LIST.tokens.map((t) => (
-              <div
-                key={t.address}
-                onClick={() => {
-                  onSelect(t);
-                  setIsOpen(false);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px',
-                  cursor: 'pointer',
-                  borderRadius: '12px'
-                }}
-              >
-                <img
-                  src={t.logoURI}
-                  onError={onImageError}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    marginRight: '12px'
+            {TOKEN_LIST.tokens
+              .filter(t => 
+                t.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.name.toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map((t) => (
+                <div
+                  key={t.address}
+                  onClick={() => {
+                    onSelect(t);
+                    setIsOpen(false);
                   }}
-                  alt={t.symbol}
-                />
-                <div>
-                  <div style={{ color: theme.textPrimary, fontWeight: '500' }}>
-                    {t.name}
-                  </div>
-                  <div style={{ color: theme.textSecondary, fontSize: '14px' }}>
-                    {t.symbol}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '12px',
+                    cursor: 'pointer',
+                    borderRadius: '12px',
+                    transition: 'background 0.2s ease'
+                  }}
+                >
+                  <img
+                    src={t.logoURI}
+                    onError={onImageError}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      marginRight: '12px'
+                    }}
+                    alt={t.symbol}
+                  />
+                  <div>
+                    <div style={{ color: theme.textPrimary, fontWeight: '500' }}>
+                      {t.name}
+                    </div>
+                    <div style={{ color: theme.textSecondary, fontSize: '14px' }}>
+                      {t.symbol}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -328,44 +434,6 @@ const TokenInput = ({ theme, token, amount, balance, readOnly, onAmountChange, o
           Max
         </button>
       )}
-    </div>
-  </div>
-);
-
-const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, gasFee }) => (
-  <div style={{
-    borderTop: `1px solid ${theme.border}`,
-    paddingTop: '16px',
-    marginBottom: '24px'
-  }}>
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: '8px'
-    }}>
-      <span style={{ color: theme.textSecondary }}>Tỷ giá</span>
-      <span style={{ color: theme.textPrimary }}>
-        1 {inputToken.symbol} ≈ 1.5 {outputToken.symbol}
-      </span>
-    </div>
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: '8px'
-    }}>
-      <span style={{ color: theme.textSecondary }}>Price Impact</span>
-      <span style={{ color: priceImpact > 2 ? '#FF3B3B' : theme.textPrimary }}>
-        {priceImpact}%
-      </span>
-    </div>
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between'
-    }}>
-      <span style={{ color: theme.textSecondary }}>Phí ước tính</span>
-      <span style={{ color: theme.textPrimary }}>
-        ${gasFee}
-      </span>
     </div>
   </div>
 );
@@ -446,6 +514,8 @@ const SwapInterface = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [priceImpact, setPriceImpact] = useState(1.2);
   const [gasFee, setGasFee] = useState(0.0034);
+  const [exchangeRate, setExchangeRate] = useState('0.0000');
+  const [isRateLoading, setIsRateLoading] = useState(false);
   const [balances, setBalances] = useState({});
   const [web3, setWeb3] = useState(null);
   const [account, setAccount] = useState(null);
@@ -564,10 +634,13 @@ const SwapInterface = () => {
   useEffect(() => {
     const fetchRate = async () => {
       if (web3 && inputAmount && inputToken && outputToken) {
+        setIsRateLoading(true);
         await calculateSwapRate();
+        setIsRateLoading(false);
       }
     };
-    fetchRate();
+    const debouncedFetch = setTimeout(fetchRate, 500);
+    return () => clearTimeout(debouncedFetch);
   }, [inputToken, outputToken, inputAmount, web3]);
 
   const checkNetwork = async (web3) => {
@@ -643,7 +716,7 @@ const SwapInterface = () => {
     setOutputToken(temp);
     setInputAmount('');
     setOutputAmount('');
-    calculateSwapRate(); // Kích hoạt tính toán lại
+    calculateSwapRate();
   };
 
   // -------------------- PHÊ DUYỆT & UNIVERSAL ROUTER --------------------
@@ -697,39 +770,55 @@ const SwapInterface = () => {
 
   // -------------------- calculateSwapRate --------------------
   const calculateSwapRate = async () => {
-    if (!inputAmount || !web3 || !inputToken || !outputToken) return;
+    if (!inputAmount || !web3 || !inputToken || !outputToken) {
+      setOutputAmount('');
+      return;
+    }
     
     try {
       const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
       let path = [];
-      const isInputNative = inputToken.symbol === 'MON';
-      const isOutputNative = outputToken.symbol === 'MON';
-
-      if (isInputNative) {
-        path = [WMON_ADDRESS, isOutputNative ? WMON_ADDRESS : outputToken.address];
-      } else if (isOutputNative) {
+      
+      if (inputToken.symbol === 'MON') {
+        path = [WMON_ADDRESS, outputToken.address === '0xNative' ? WMON_ADDRESS : outputToken.address];
+      } else if (outputToken.symbol === 'MON') {
         path = [inputToken.address, WMON_ADDRESS];
       } else {
         path = [inputToken.address, outputToken.address];
       }
-
+      
       path = path.filter(addr => addr !== '0xNative');
-
+      
       const amountIn = web3.utils.toWei(inputAmount, 'ether');
       const amounts = await router.methods.getAmountsOut(amountIn, path).call();
       
-      if (amounts && amounts.length > 1) {
+      if (amounts && amounts.length >= 2) {
         const output = web3.utils.fromWei(amounts[amounts.length - 1], 'ether');
+        const rate = (amounts[1] / amountIn).toFixed(6);
         setOutputAmount(output);
-        const idealOutput = inputAmount * 1.5; // Giá lý tưởng giả định
-        const impact = ((idealOutput - output)/idealOutput * 100).toFixed(2);
+        setExchangeRate(rate);
+        
+        // Tính toán price impact dựa trên thông số pool
+        const reserves = await getPoolReserves(path[0], path[1]);
+        const idealOutput = inputAmount * (reserves[1] / reserves[0]);
+        const impact = ((idealOutput - output) / idealOutput * 100).toFixed(2);
         setPriceImpact(Math.abs(impact));
       }
     } catch (error) {
       console.error('Lỗi tính tỷ giá:', error);
       setOutputAmount('0.0000');
+      setExchangeRate('0.0000');
       setPriceImpact(0.00);
     }
+  };
+
+  // -------------------- getPoolReserves --------------------
+  const getPoolReserves = async (tokenA, tokenB) => {
+    const factory = new web3.eth.Contract(UNISWAP_V2_FACTORY_ABI, UNISWAP_V2_FACTORY_ADDRESS);
+    const pairAddress = await factory.methods.getPair(tokenA, tokenB).call();
+    const pairContract = new web3.eth.Contract(UNISWAP_V2_PAIR_ABI, pairAddress);
+    const reserves = await pairContract.methods.getReserves().call();
+    return [reserves[0], reserves[1]];
   };
 
   // -------------------- handleSwap --------------------
@@ -834,217 +923,243 @@ const SwapInterface = () => {
       fontFamily: 'Arial, sans-serif'
     }}>
       <div style={{
-        width: '420px',
-        backgroundColor: currentTheme.container,
-        borderRadius: '24px',
+        width: '440px',
+        background: currentTheme.container,
+        borderRadius: '20px',
         padding: '24px',
-        boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-        border: `1px solid ${currentTheme.border}`
+        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+        border: `1px solid ${currentTheme.border}`,
+        position: 'relative',
+        overflow: 'hidden'
       }}>
+        {/* Hiệu ứng gradient */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px'
-        }}>
-          <h1 style={{ color: currentTheme.textPrimary, fontSize: '24px', fontWeight: 'bold' }}>
-            Monad Swap
-          </h1>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {walletLoading ? (
-              <button
-                style={{
-                  padding: '8px',
-                  borderRadius: '8px',
-                  background: currentTheme.accent,
-                  border: 'none',
-                  color: '#FFFFFF',
-                  cursor: 'not-allowed'
-                }}
-                disabled
-              >
-                Loading wallet...
-              </button>
-            ) : account ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{
-                  padding: '8px',
-                  borderRadius: '8px',
-                  background: currentTheme.inputBg,
-                  border: `1px solid ${currentTheme.border}`,
-                  color: currentTheme.textPrimary
-                }}>
-                  {account.slice(0, 6)}...{account.slice(-4)}
-                </div>
+          position: 'absolute',
+          top: '-50%',
+          left: '-50%',
+          width: '200%',
+          height: '200%',
+          background: `linear-gradient(45deg, ${currentTheme.accent}20 0%, ${currentTheme.bg} 100%)`,
+          zIndex: 0,
+          pointerEvents: 'none'
+        }}/>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px'
+          }}>
+            <h1 style={{ color: currentTheme.textPrimary, fontSize: '24px', fontWeight: 'bold' }}>
+              Monad Swap
+            </h1>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {walletLoading ? (
                 <button
-                  onClick={disconnectWallet}
                   style={{
                     padding: '8px',
                     borderRadius: '8px',
-                    background: '#FF3B3B',
+                    background: currentTheme.accent,
+                    border: 'none',
+                    color: '#FFFFFF',
+                    cursor: 'not-allowed'
+                  }}
+                  disabled
+                >
+                  Loading wallet...
+                </button>
+              ) : account ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: currentTheme.inputBg,
+                    border: `1px solid ${currentTheme.border}`,
+                    color: currentTheme.textPrimary
+                  }}>
+                    {account.slice(0, 6)}...{account.slice(-4)}
+                  </div>
+                  <button
+                    onClick={disconnectWallet}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: '#FF3B3B',
+                      border: 'none',
+                      color: '#FFFFFF',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={connectWallet}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: currentTheme.accent,
                     border: 'none',
                     color: '#FFFFFF',
                     cursor: 'pointer'
                   }}
                 >
-                  Disconnect
+                  Connect Wallet
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={connectWallet}
+              )}
+              <button 
+                onClick={() => setDarkMode(!darkMode)}
                 style={{
                   padding: '8px',
                   borderRadius: '8px',
-                  background: currentTheme.accent,
-                  border: 'none',
-                  color: '#FFFFFF',
+                  background: currentTheme.inputBg,
+                  border: `1px solid ${currentTheme.border}`,
                   cursor: 'pointer'
                 }}
               >
-                Connect Wallet
+                {darkMode ? '🌞' : '🌜'}
               </button>
-            )}
-            <button 
-              onClick={() => setDarkMode(!darkMode)}
+            </div>
+          </div>
+          <TokenInput
+            theme={currentTheme}
+            token={inputToken}
+            amount={inputAmount}
+            balance={balances[inputToken.symbol]}
+            readOnly={false}
+            onAmountChange={(value) => setInputAmount(value)}
+            onTokenSelect={(token) => {
+              setInputToken(token);
+              setInputAmount('');
+            }}
+            onImageError={handleImageError}
+          />
+          <div style={{ margin: '16px 0', position: 'relative' }}>
+            <button
+              onClick={switchTokens}
               style={{
-                padding: '8px',
-                borderRadius: '8px',
-                background: currentTheme.inputBg,
-                border: `1px solid ${currentTheme.border}`,
-                cursor: 'pointer'
+                background: currentTheme.accent,
+                border: 'none',
+                borderRadius: '50%',
+                padding: '10px',
+                cursor: 'pointer',
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}
             >
-              {darkMode ? '🌞' : '🌜'}
+              <FiRepeat 
+                style={{ 
+                  color: '#fff',
+                  fontSize: '20px',
+                  transition: 'transform 0.3s ease'
+                }}
+              />
             </button>
           </div>
-        </div>
-        <TokenInput
-          theme={currentTheme}
-          token={inputToken}
-          amount={inputAmount}
-          balance={balances[inputToken.symbol]}
-          readOnly={false}
-          onAmountChange={(value) => { setInputAmount(value); calculateSwapRate(); }}
-          onTokenSelect={setInputToken}
-          onImageError={handleImageError}
-        />
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          margin: '16px 0'
-        }}>
+          <TokenInput
+            theme={currentTheme}
+            token={outputToken}
+            amount={outputAmount}
+            balance={balances[outputToken.symbol]}
+            readOnly={true}
+            onTokenSelect={setOutputToken}
+            onImageError={handleImageError}
+          />
+          <SwapInfo
+            theme={currentTheme}
+            inputToken={inputToken}
+            outputToken={outputToken}
+            priceImpact={priceImpact}
+            exchangeRate={exchangeRate}
+            isLoading={isRateLoading}
+            gasFee={gasFee}
+          />
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
+            <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
+              <input
+                type="checkbox"
+                checked={usePermit2}
+                onChange={(e) => setUsePermit2(e.target.checked)}
+              />
+              Sử dụng Permit2
+            </label>
+            <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
+              <input
+                type="checkbox"
+                checked={useUniversalRouter}
+                onChange={(e) => setUseUniversalRouter(e.target.checked)}
+              />
+              Sử dụng Universal Router
+            </label>
+          </div>
           <button
-            onClick={switchTokens}
+            onClick={handleSwap}
+            disabled={loading}
             style={{
-              background: currentTheme.inputBg,
-              border: `1px solid ${currentTheme.border}`,
-              borderRadius: '50%',
-              padding: '8px',
-              cursor: 'pointer'
+              width: '100%',
+              padding: '12px',
+              background: currentTheme.accent,
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold'
             }}
           >
-            <FiRepeat style={{ color: currentTheme.textPrimary }} />
+            {loading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}>
+                  ⏳
+                </motion.div>
+                Đang xử lý...
+              </div>
+            ) : (
+              'Swap Now'
+            )}
           </button>
-        </div>
-        <TokenInput
-          theme={currentTheme}
-          token={outputToken}
-          amount={outputAmount}
-          balance={balances[outputToken.symbol]}
-          readOnly={true}
-          onTokenSelect={setOutputToken}
-          onImageError={handleImageError}
-        />
-        <SwapInfo
-          theme={currentTheme}
-          inputToken={inputToken}
-          outputToken={outputToken}
-          priceImpact={priceImpact}
-          gasFee={gasFee}
-        />
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
-          <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
-            <input
-              type="checkbox"
-              checked={usePermit2}
-              onChange={(e) => setUsePermit2(e.target.checked)}
-            />
-            Sử dụng Permit2
-          </label>
-          <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
-            <input
-              type="checkbox"
-              checked={useUniversalRouter}
-              onChange={(e) => setUseUniversalRouter(e.target.checked)}
-            />
-            Sử dụng Universal Router
-          </label>
-        </div>
-        <button
-          onClick={handleSwap}
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '12px',
-            background: currentTheme.accent,
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '16px',
-            fontWeight: 'bold'
-          }}
-        >
-          {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}>
+          <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            <button
+              onClick={() => setShowSettings(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: currentTheme.accent,
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              <FiSettings /> Cài đặt giao dịch
+            </button>
+          </div>
+          {Object.keys(balances).length === 0 && (
+            <div style={{
+              textAlign: 'center',
+              color: currentTheme.textSecondary,
+              padding: '12px'
+            }}>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity }}
+                style={{ display: 'inline-block' }}
+              >
                 ⏳
               </motion.div>
-              Đang xử lý...
+              <p>Đang tải số dư ví...</p>
             </div>
-          ) : (
-            'Swap Now'
           )}
-        </button>
-        <div style={{ marginTop: '16px', textAlign: 'center' }}>
-          <button
-            onClick={() => setShowSettings(true)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: currentTheme.accent,
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            <FiSettings /> Cài đặt giao dịch
-          </button>
+          {showSettings && (
+            <SettingsModal
+              theme={currentTheme}
+              slippage={slippage}
+              setSlippage={setSlippage}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
         </div>
-        {Object.keys(balances).length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            color: currentTheme.textSecondary,
-            padding: '12px'
-          }}>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity }}
-              style={{ display: 'inline-block' }}
-            >
-              ⏳
-            </motion.div>
-            <p>Đang tải số dư ví...</p>
-          </div>
-        )}
-        {showSettings && (
-          <SettingsModal
-            theme={currentTheme}
-            slippage={slippage}
-            setSlippage={setSlippage}
-            onClose={() => setShowSettings(false)}
-          />
-        )}
       </div>
     </div>
   );
