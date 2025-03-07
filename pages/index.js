@@ -456,11 +456,13 @@ const SwapInterface = () => {
     try {
       const newBalances = {};
       const nativeBalance = await web3.eth.getBalance(account);
-      newBalances.MON = web3.utils.fromWei(nativeBalance);
+      const nativeBN = web3.utils.toBN(nativeBalance);
+      newBalances.MON = nativeBN.gt(web3.utils.toBN(0)) ? web3.utils.fromWei(nativeBalance) : "0";
       const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
       const pdcBalance = await pdcContract.methods.balanceOf(account).call();
+      const pdcBN = web3.utils.toBN(pdcBalance);
       const pdcDecimals = await pdcContract.methods.decimals().call();
-      newBalances.PDC = (pdcBalance / (10 ** pdcDecimals)).toFixed(4);
+      newBalances.PDC = pdcBN.gt(web3.utils.toBN(0)) ? (Number(pdcBalance) / Math.pow(10, Number(pdcDecimals))).toFixed(4) : "0";
       setBalances(newBalances);
     } catch (error) {
       console.error('Lỗi lấy số dư:', error);
