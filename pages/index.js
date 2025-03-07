@@ -54,7 +54,7 @@ const TOKEN_LIST = {
       logoURI: "https://example.com/monad-logo.png"
     }
   ]
-};
+];
 
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -348,6 +348,7 @@ const SwapInterface = () => {
   const [web3, setWeb3] = useState(null);
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [walletLoading, setWalletLoading] = useState(false);
 
   const theme = {
     dark: {
@@ -372,6 +373,7 @@ const SwapInterface = () => {
 
   const connectWallet = async () => {
     if (window.ethereum) {
+      setWalletLoading(true);
       try {
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         if (accounts.length > 0) {
@@ -381,10 +383,17 @@ const SwapInterface = () => {
       } catch (error) {
         console.error('Lỗi kết nối ví:', error);
         alert('Kết nối ví thất bại!');
+      } finally {
+        setWalletLoading(false);
       }
     } else {
       alert('Vui lòng cài đặt MetaMask!');
     }
+  };
+
+  const disconnectWallet = () => {
+    setAccount(null);
+    setBalances({});
   };
 
   useEffect(() => {
@@ -550,15 +559,44 @@ const SwapInterface = () => {
             Monad Swap
           </h1>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {account ? (
-              <div style={{
-                padding: '8px',
-                borderRadius: '8px',
-                background: currentTheme.inputBg,
-                border: `1px solid ${currentTheme.border}`,
-                color: currentTheme.textPrimary
-              }}>
-                {account.slice(0, 6)}...{account.slice(-4)}
+            {walletLoading ? (
+              <button
+                style={{
+                  padding: '8px',
+                  borderRadius: '8px',
+                  background: currentTheme.accent,
+                  border: 'none',
+                  color: '#FFFFFF',
+                  cursor: 'not-allowed'
+                }}
+                disabled
+              >
+                Loading wallet...
+              </button>
+            ) : account ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  padding: '8px',
+                  borderRadius: '8px',
+                  background: currentTheme.inputBg,
+                  border: `1px solid ${currentTheme.border}`,
+                  color: currentTheme.textPrimary
+                }}>
+                  {account.slice(0, 6)}...{account.slice(-4)}
+                </div>
+                <button
+                  onClick={disconnectWallet}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: '#FF3B3B',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Disconnect
+                </button>
               </div>
             ) : (
               <button
