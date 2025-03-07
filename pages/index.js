@@ -22,7 +22,7 @@ const ERC20_ABI = [
 ];
 
 const MONAD_TESTNET_PARAMS = {
-  chainId: '0x279F',
+  chainId: '0x279F', // 10175 in decimal
   chainName: 'Monad Testnet',
   nativeCurrency: {
     name: 'MON',
@@ -38,7 +38,7 @@ const TOKEN_LIST = {
   logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/main/08a10a45-3c84-4b21-b202-53b952780b39.webp",
   tokens: [
     {
-      chainId: 10143,
+      chainId: 10175,
       address: "0x083978Dd12842779e907472A331314190730a5Bf",
       symbol: "PDC",
       name: "PurpleDuck",
@@ -46,7 +46,7 @@ const TOKEN_LIST = {
       logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/main/08a10a45-3c84-4b21-b202-53b952780b39.webp"
     },
     {
-      chainId: 10143,
+      chainId: 10175,
       address: "0xNative",
       symbol: "MON",
       name: "Monad",
@@ -210,8 +210,15 @@ const TokenInput = ({ theme, token, amount, balance, readOnly, onAmountChange, o
       justifyContent: 'space-between',
       alignItems: 'center'
     }}>
-      <span style={{ color: theme.textSecondary, fontSize: '14px' }}>
-        Balance: {typeof balance !== 'undefined' ? parseFloat(balance).toLocaleString(undefined, { maximumFractionDigits: 4 }) : 'Loading...'}
+      <span style={{ 
+        color: theme.textSecondary,
+        fontSize: '14px'
+      }}>
+        {token.symbol} Balance: {balance !== undefined ? 
+          parseFloat(balance).toLocaleString('en-US', {
+            minimumFractionDigits: 4,
+            maximumFractionDigits: 4
+          }) : 'Connecting...'}
       </span>
       {!readOnly && (
         <button
@@ -396,6 +403,34 @@ const SwapInterface = () => {
     setBalances({});
   };
 
+  // Lắng nghe sự thay đổi tài khoản và mạng
+  useEffect(() => {
+    if (window.ethereum) {
+      const handleAccountsChanged = (accounts) => {
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          fetchBalances(accounts[0]);
+        } else {
+          disconnectWallet();
+        }
+      };
+
+      const handleChainChanged = (chainId) => {
+        if (chainId === MONAD_TESTNET_PARAMS.chainId) {
+          if (account) fetchBalances(account);
+        }
+      };
+
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
+    }
+  }, [account]);
+
   useEffect(() => {
     const initWeb3 = async () => {
       if (window.ethereum) {
@@ -461,20 +496,28 @@ const SwapInterface = () => {
     }
   };
 
+  // Cập nhật hàm fetchBalances để lấy số dư cho tất cả các token
   const fetchBalances = async (account) => {
     try {
       const newBalances = {};
-      const nativeBalance = await web3.eth.getBalance(account);
-      const nativeBN = web3.utils.toBN(nativeBalance);
-      newBalances.MON = nativeBN.gt(web3.utils.toBN(0)) ? web3.utils.fromWei(nativeBalance) : "0";
-      const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
-      const pdcBalance = await pdcContract.methods.balanceOf(account).call();
-      const pdcBN = web3.utils.toBN(pdcBalance);
-      const pdcDecimals = await pdcContract.methods.decimals().call();
-      newBalances.PDC = pdcBN.gt(web3.utils.toBN(0)) ? (Number(pdcBalance) / Math.pow(10, Number(pdcDecimals))).toFixed(4) : "0";
+      for (const token of TOKEN_LIST.tokens) {
+        if (token.symbol === "MON") {
+          const balance = await web3.eth.getBalance(account);
+          newBalances[token.symbol] = web3.utils.fromWei(balance, 'ether');
+        } else {
+          const contract = new web3.eth.Contract(ERC20_ABI, token.address);
+          const balance = await contract.methods.balanceOf(account).call();
+          const decimals = await contract.methods.decimals().call();
+          newBalances[token.symbol] = (Number(balance) / Math.pow(10, Number(decimals))).toFixed(4);
+        }
+      }
       setBalances(newBalances);
     } catch (error) {
       console.error('Lỗi lấy số dư:', error);
+      setBalances({
+        MON: '0.0000',
+        PDC: '0.0000'
+      });
     }
   };
 
@@ -702,6 +745,22 @@ const SwapInterface = () => {
             <FiSettings /> Cài đặt giao dịch
           </button>
         </div>
+        {Object.keys(balances).length === 0 && (
+          <div style={{
+            textAlign: 'center',
+            color: currentTheme.textSecondary,
+            padding: '12px'
+          }}>
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity }}
+              style={{ display: 'inline-block' }}
+            >
+              ⏳
+            </motion.div>
+            <p>Đang tải số dư ví...</p>
+          </div>
+        )}
         {showSettings && (
           <SettingsModal
             theme={currentTheme}
