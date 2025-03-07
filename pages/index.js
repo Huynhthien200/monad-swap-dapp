@@ -21,6 +21,48 @@ const ERC20_ABI = [
   }
 ];
 
+const ROUTER_ABI = [
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+    ],
+    "name": "swapExactTokensForTokens",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+    ],
+    "name": "swapExactETHForTokens",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" }
+    ],
+    "name": "getAmountsOut",
+    "outputs": [
+      { "internalType": "uint256[]", "name": "", "type": "uint256[]" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
+const ROUTER_ADDRESS = '0xfB8e1C3b833f9E67a71C859a132cf783b645e436';
+
 const MONAD_TESTNET_PARAMS = {
   chainId: '0x279F', // 10175 in decimal
   chainName: 'Monad Testnet',
@@ -54,6 +96,10 @@ const TOKEN_LIST = {
       logoURI: "https://example.com/monad-logo.png"
     }
   ]
+};
+
+const getWrappedNativeAddress = () => {
+  return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 };
 
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
@@ -403,7 +449,6 @@ const SwapInterface = () => {
     setBalances({});
   };
 
-  // Lắng nghe sự thay đổi tài khoản và mạng
   useEffect(() => {
     if (window.ethereum) {
       const handleAccountsChanged = (accounts) => {
@@ -496,7 +541,6 @@ const SwapInterface = () => {
     }
   };
 
-  // Cập nhật hàm fetchBalances để lấy số dư cho tất cả các token
   const fetchBalances = async (account) => {
     try {
       const newBalances = {};
@@ -533,27 +577,78 @@ const SwapInterface = () => {
     setOutputAmount('');
   };
 
-  const calculateSwapRate = async () => {
-    if (!inputAmount || isNaN(inputAmount)) return;
-    const rate = inputToken.symbol === "MON" ? 1.5 : 1 / 1.5;
-    setOutputAmount((inputAmount * rate).toFixed(4));
-    setPriceImpact((Math.random() * 2).toFixed(2));
-  };
-
   const handleSwap = async () => {
-    if (!validateInput()) return;
+    if (!validateInput() || !web3 || !account) return;
     try {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('Swap thành công!');
-      setInputAmount('');
-      setOutputAmount('');
-      await fetchBalances(account);
+      const router = new web3.eth.Contract(ROUTER_ABI, ROUTER_ADDRESS);
+      const path = [
+        inputToken.address === '0xNative' ? getWrappedNativeAddress() : inputToken.address,
+        outputToken.address === '0xNative' ? getWrappedNativeAddress() : outputToken.address
+      ];
+      const amountIn = web3.utils.toWei(inputAmount, 'ether');
+      const amountOutMin = web3.utils.toWei(
+        (outputAmount * (1 - slippage / 100)).toString(),
+        'ether'
+      );
+      const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
+      let tx;
+      if (inputToken.symbol === 'MON') {
+        tx = await router.methods.swapExactETHForTokens(
+          amountOutMin,
+          path,
+          account,
+          deadline
+        ).send({
+          from: account,
+          value: amountIn
+        });
+      } else {
+        const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
+        await tokenContract.methods.approve(ROUTER_ADDRESS, amountIn).send({ from: account });
+        tx = await router.methods.swapExactTokensForTokens(
+          amountIn,
+          amountOutMin,
+          path,
+          account,
+          deadline
+        ).send({ from: account });
+      }
+      if (tx.status) {
+        alert('Swap thành công!');
+        await fetchBalances(account);
+        setInputAmount('');
+        setOutputAmount('');
+      }
     } catch (error) {
-      alert('Swap thất bại: ' + error.message);
+      console.error('Lỗi swap:', error);
+      alert(`Lỗi: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateSwapRate = async () => {
+    if (!inputAmount || !web3) return;
+    try {
+      const router = new web3.eth.Contract(ROUTER_ABI, ROUTER_ADDRESS);
+      const path = [
+        inputToken.address === '0xNative' ? getWrappedNativeAddress() : inputToken.address,
+        outputToken.address === '0xNative' ? getWrappedNativeAddress() : outputToken.address
+      ];
+      const amountIn = web3.utils.toWei(inputAmount, 'ether');
+      const amountsOut = await router.methods.getAmountsOut(amountIn, path).call();
+      const outAmt = web3.utils.fromWei(amountsOut[1], 'ether');
+      setOutputAmount(outAmt);
+      const priceImpact = ((1 - (outAmt / (inputAmount * 1.5))) * 100).toFixed(2);
+      setPriceImpact(priceImpact);
+    } catch (error) {
+      console.error('Lỗi tính tỷ giá:', error);
+    }
+  };
+
+  const getWrappedNativeAddress = () => {
+    return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
   };
 
   const validateInput = () => {
@@ -729,7 +824,16 @@ const SwapInterface = () => {
             fontWeight: 'bold'
           }}
         >
-          {loading ? 'Swapping...' : 'Swap'}
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}>
+                ⏳
+              </motion.div>
+              Đang xử lý...
+            </div>
+          ) : (
+            'Swap Now'
+          )}
         </button>
         <div style={{ marginTop: '16px', textAlign: 'center' }}>
           <button
