@@ -35,7 +35,8 @@ const MONAD_TESTNET_PARAMS = {
 };
 
 const TOKEN_LIST = {
-
+  name: "PurpleDuck Token List",
+  logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/main/08a10a45-3c84-4b21-b202-53b952780b39.webp",
   tokens: [
     {
       chainId: 10143,
@@ -405,6 +406,23 @@ const SwapInterface = () => {
     }
   };
 
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          await fetchBalances(accounts[0]);
+        }
+      } catch (error) {
+        console.error('Lỗi kết nối ví:', error);
+        alert('Kết nối ví thất bại!');
+      }
+    } else {
+      alert('Vui lòng cài đặt MetaMask!');
+    }
+  };
+
   useEffect(() => {
     const initWeb3 = async () => {
       if (window.ethereum) {
@@ -468,15 +486,12 @@ const SwapInterface = () => {
   const fetchBalances = async (account) => {
     try {
       const newBalances = {};
-      
       const nativeBalance = await web3.eth.getBalance(account);
       newBalances.MON = web3.utils.fromWei(nativeBalance);
-
       const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
       const pdcBalance = await pdcContract.methods.balanceOf(account).call();
       const pdcDecimals = await pdcContract.methods.decimals().call();
       newBalances.PDC = (pdcBalance / (10 ** pdcDecimals)).toFixed(4);
-
       setBalances(newBalances);
     } catch (error) {
       console.error('Lỗi lấy số dư:', error);
@@ -554,7 +569,6 @@ const SwapInterface = () => {
         boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
         border: `1px solid ${currentTheme.border}`
       }}>
-        {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -568,21 +582,47 @@ const SwapInterface = () => {
           }}>
             Monad Swap
           </h1>
-          <button 
-            onClick={() => setDarkMode(!darkMode)}
-            style={{
-              padding: '8px',
-              borderRadius: '8px',
-              background: currentTheme.inputBg,
-              border: `1px solid ${currentTheme.border}`,
-              cursor: 'pointer'
-            }}
-          >
-            {darkMode ? '🌞' : '🌜'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {account ? (
+              <div style={{
+                padding: '8px',
+                borderRadius: '8px',
+                background: currentTheme.inputBg,
+                border: `1px solid ${currentTheme.border}`,
+                color: currentTheme.textPrimary
+              }}>
+                {account.slice(0, 6)}...{account.slice(-4)}
+              </div>
+            ) : (
+              <button
+                onClick={connectWallet}
+                style={{
+                  padding: '8px',
+                  borderRadius: '8px',
+                  background: currentTheme.accent,
+                  border: 'none',
+                  color: '#FFFFFF',
+                  cursor: 'pointer'
+                }}
+              >
+                Connect Wallet
+              </button>
+            )}
+            <button 
+              onClick={() => setDarkMode(!darkMode)}
+              style={{
+                padding: '8px',
+                borderRadius: '8px',
+                background: currentTheme.inputBg,
+                border: `1px solid ${currentTheme.border}`,
+                cursor: 'pointer'
+              }}
+            >
+              {darkMode ? '🌞' : '🌜'}
+            </button>
+          </div>
         </div>
 
-        {/* Swap Inputs */}
         <TokenInput
           theme={currentTheme}
           token={inputToken}
