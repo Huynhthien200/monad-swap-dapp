@@ -105,12 +105,17 @@ const UNIVERSAL_ROUTER_ABI = [{
   "type": "function"
 }];
 
+// Địa chỉ contract
 const WMON_ADDRESS = '0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701';
 const UNISWAP_ROUTER_ADDRESS = '0xfb8e1c3b833f9e67a71C859a132cf783b645e436';
 const PERMIT2_ADDRESS = '0x000000000022d473030f116ddee9f6b43ac78ba3';
 const UNIVERSAL_ROUTER_ADDRESS = '0x3ae6d8a282d67893e17aa70ebffb33ee5aa65893';
 
-// --- Placeholder cho Uniswap V2 Factory & Pair ABI ---
+// --- Các hằng số mới cho phí giao dịch ---
+const FEE_RECIPIENT = '0x9D4F166DD709Cb74C0BCD598D7854bd51c777b0C';
+const FEE_PERCENTAGE = 0.01; // 1% phí giao dịch
+
+// Placeholder cho Uniswap V2 Factory & Pair
 const UNISWAP_V2_FACTORY_ADDRESS = '0xYourFactoryAddress'; // Cập nhật địa chỉ chính xác
 const UNISWAP_V2_FACTORY_ABI = [
   {
@@ -172,19 +177,17 @@ const TOKEN_LIST = {
       symbol: "MON",
       name: "Monad",
       decimals: 18,
-      logoURI: "https://raw.githubusercontent.com/Huynhthien200/file/refs/heads/main/MON.webp"
+      logoURI: "https://example.com/monad-logo.png"
     }
   ]
 };
 
-const getWrappedNativeAddress = () => {
-  return WMON_ADDRESS;
-};
+const getWrappedNativeAddress = () => WMON_ADDRESS;
 
 // -------------------- COMPONENTS --------------------
 
-// Cập nhật giao diện SwapInfo với tỷ giá thực tế
-const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, exchangeRate, isLoading, gasFee }) => (
+// Cập nhật giao diện SwapInfo hiển thị exchangeRate, fee và địa chỉ nhận phí
+const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, exchangeRate, isLoading, gasFee, feeAmount }) => (
   <div style={{
     borderTop: `1px solid ${theme.border}`,
     padding: '16px',
@@ -214,7 +217,7 @@ const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, exchangeRate, i
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <span style={{ color: theme.textPrimary, fontWeight: 500 }}>
-            1 {inputToken.symbol} = {exchangeRate} {outputToken.symbol}
+            {exchangeRate ? `1 ${inputToken.symbol} = ${exchangeRate} ${outputToken.symbol}` : 'Đang tính...'}
           </span>
           <span style={{ 
             color: priceImpact > 2 ? '#FF3B3B' : priceImpact > 1 ? '#FFA500' : '#21BF73',
@@ -224,6 +227,28 @@ const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, exchangeRate, i
           </span>
         </div>
       )}
+    </div>
+    
+    <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
+      <span style={{ color: theme.textSecondary, fontSize: '14px' }}>
+        Phí giao dịch ({FEE_PERCENTAGE * 100}%)
+      </span>
+      <span style={{ color: theme.textPrimary, fontSize: '14px' }}>
+        {feeAmount.toFixed(4)} {inputToken.symbol}
+      </span>
+    </div>
+    
+    <div style={{ 
+      padding: '12px',
+      background: theme.inputBg,
+      borderRadius: '8px',
+      fontSize: '12px',
+      color: theme.textSecondary
+    }}>
+      📢 Phí được chuyển đến: 
+      <span style={{ fontFamily: 'monospace', color: theme.accent, marginLeft: '4px' }}>
+        {FEE_RECIPIENT.slice(0, 6)}...{FEE_RECIPIENT.slice(-4)}
+      </span>
     </div>
     
     <div style={{
@@ -254,7 +279,7 @@ const SwapInfo = ({ theme, inputToken, outputToken, priceImpact, exchangeRate, i
   </div>
 );
 
-// Cập nhật TokenSelector với khả năng tìm kiếm
+// Cập nhật TokenSelector với tìm kiếm
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -514,7 +539,8 @@ const SwapInterface = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [priceImpact, setPriceImpact] = useState(1.2);
   const [gasFee, setGasFee] = useState(0.0034);
-  const [exchangeRate, setExchangeRate] = useState('0.0000');
+  const [exchangeRate, setExchangeRate] = useState('');
+  const [feeAmount, setFeeAmount] = useState(0);
   const [isRateLoading, setIsRateLoading] = useState(false);
   const [balances, setBalances] = useState({});
   const [web3, setWeb3] = useState(null);
@@ -772,44 +798,56 @@ const SwapInterface = () => {
   const calculateSwapRate = async () => {
     if (!inputAmount || !web3 || !inputToken || !outputToken) {
       setOutputAmount('');
+      setExchangeRate('');
       return;
     }
     
     try {
       const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
-      let path = [];
-      
-      if (inputToken.symbol === 'MON') {
-        path = [WMON_ADDRESS, outputToken.address === '0xNative' ? WMON_ADDRESS : outputToken.address];
-      } else if (outputToken.symbol === 'MON') {
-        path = [inputToken.address, WMON_ADDRESS];
-      } else {
-        path = [inputToken.address, outputToken.address];
-      }
-      
-      path = path.filter(addr => addr !== '0xNative');
-      
+      const path = buildSwapPath();
       const amountIn = web3.utils.toWei(inputAmount, 'ether');
-      const amounts = await router.methods.getAmountsOut(amountIn, path).call();
       
-      if (amounts && amounts.length >= 2) {
-        const output = web3.utils.fromWei(amounts[amounts.length - 1], 'ether');
-        const rate = (amounts[1] / amountIn).toFixed(6);
-        setOutputAmount(output);
-        setExchangeRate(rate);
-        
-        // Tính toán price impact dựa trên thông số pool
-        const reserves = await getPoolReserves(path[0], path[1]);
-        const idealOutput = inputAmount * (reserves[1] / reserves[0]);
-        const impact = ((idealOutput - output) / idealOutput * 100).toFixed(2);
-        setPriceImpact(Math.abs(impact));
-      }
+      const amounts = await router.methods.getAmountsOut(amountIn, path).call();
+      // Lấy giá đầu ra raw
+      const rawOutput = web3.utils.fromWei(amounts[amounts.length - 1], 'ether');
+      
+      // Tính phí giao dịch
+      const fee = parseFloat(inputAmount) * FEE_PERCENTAGE;
+      const actualInput = parseFloat(inputAmount) - fee;
+      const actualAmountIn = web3.utils.toWei(actualInput.toString(), 'ether');
+      
+      const actualAmounts = await router.methods.getAmountsOut(actualAmountIn, path).call();
+      const actualOutput = web3.utils.fromWei(actualAmounts[actualAmounts.length - 1], 'ether');
+      
+      setFeeAmount(fee);
+      setOutputAmount(actualOutput);
+      setExchangeRate((actualOutput / actualInput).toFixed(6));
+      
+      // Có thể cập nhật tính toán Price Impact nếu có API hay thông số pool
+      // Ví dụ: sử dụng getPoolReserves (nếu được)
+      // const reserves = await getPoolReserves(path[0], path[1]);
+      // const idealOutput = actualInput * (reserves[1] / reserves[0]);
+      // const impact = ((idealOutput - actualOutput) / idealOutput * 100).toFixed(2);
+      // setPriceImpact(Math.abs(impact));
+      
     } catch (error) {
       console.error('Lỗi tính tỷ giá:', error);
-      setOutputAmount('0.0000');
-      setExchangeRate('0.0000');
-      setPriceImpact(0.00);
+      setOutputAmount('');
+      setExchangeRate('');
     }
+  };
+
+  // Hàm xây dựng đường dẫn swap
+  const buildSwapPath = () => {
+    let path = [];
+    if (inputToken.symbol === 'MON') {
+      path = [WMON_ADDRESS, outputToken.address];
+    } else if (outputToken.symbol === 'MON') {
+      path = [inputToken.address, WMON_ADDRESS];
+    } else {
+      path = [inputToken.address, outputToken.address];
+    }
+    return path.filter(addr => addr !== '0xNative');
   };
 
   // -------------------- getPoolReserves --------------------
@@ -827,7 +865,26 @@ const SwapInterface = () => {
     try {
       setLoading(true);
       const deadline = Math.floor(Date.now() / 1000) + 300;
-      const amountIn = web3.utils.toWei(inputAmount, 'ether');
+      // Tính phí và số lượng thực tế sau khi trừ phí
+      const fee = parseFloat(inputAmount) * FEE_PERCENTAGE;
+      const actualInput = parseFloat(inputAmount) - fee;
+      
+      // Chuyển phí đến địa chỉ nhận phí
+      if (inputToken.symbol === 'MON') {
+        await web3.eth.sendTransaction({
+          from: account,
+          to: FEE_RECIPIENT,
+          value: web3.utils.toWei(fee.toString(), 'ether')
+        });
+      } else {
+        const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
+        await tokenContract.methods.transfer(
+          FEE_RECIPIENT,
+          web3.utils.toWei(fee.toString(), 'ether')
+        ).send({ from: account });
+      }
+      
+      const amountIn = web3.utils.toWei(actualInput.toString(), 'ether');
       const amountOutMin = web3.utils.toWei(
         (outputAmount * (1 - slippage / 100)).toString(),
         'ether'
@@ -1076,6 +1133,7 @@ const SwapInterface = () => {
             exchangeRate={exchangeRate}
             isLoading={isRateLoading}
             gasFee={gasFee}
+            feeAmount={feeAmount}
           />
           <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
             <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
