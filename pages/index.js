@@ -22,6 +22,34 @@ const ERC20_ABI = [
 ];
 
 const ROUTER_ABI = [
+  // Swap MON (native) -> ERC20
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+    ],
+    "name": "swapExactETHForTokens",
+    "outputs": [{ "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" }],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  // Swap ERC20 -> MON (native)
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+    ],
+    "name": "swapExactTokensForETH",
+    "outputs": [{ "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Swap ERC20 -> ERC20
   {
     "inputs": [
       { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
@@ -31,37 +59,25 @@ const ROUTER_ABI = [
       { "internalType": "uint256", "name": "deadline", "type": "uint256" }
     ],
     "name": "swapExactTokensForTokens",
-    "outputs": [],
+    "outputs": [{ "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" }],
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
-      { "internalType": "address[]", "name": "path", "type": "address[]" },
-      { "internalType": "address", "name": "to", "type": "address" },
-      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
-    ],
-    "name": "swapExactETHForTokens",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
+  // Get price quote
   {
     "inputs": [
       { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
       { "internalType": "address[]", "name": "path", "type": "address[]" }
     ],
     "name": "getAmountsOut",
-    "outputs": [
-      { "internalType": "uint256[]", "name": "", "type": "uint256[]" }
-    ],
+    "outputs": [{ "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" }],
     "stateMutability": "view",
     "type": "function"
   }
 ];
 
-const ROUTER_ADDRESS = '0xfB8e1C3b833f9E67a71C859a132cf783b645e436';
+const WMON_ADDRESS = '0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701';
+const UNISWAP_ROUTER_ADDRESS = '0xfb8e1c3b833f9e67a71C859a132cf783b645e436';
 
 const MONAD_TESTNET_PARAMS = {
   chainId: '0x279F', // 10175 in decimal
@@ -99,7 +115,7 @@ const TOKEN_LIST = {
 };
 
 const getWrappedNativeAddress = () => {
-  return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+  return WMON_ADDRESS;
 };
 
 const TokenSelector = ({ token, theme, onSelect, onImageError }) => {
@@ -461,8 +477,11 @@ const SwapInterface = () => {
       };
 
       const handleChainChanged = (chainId) => {
-        if (chainId === MONAD_TESTNET_PARAMS.chainId) {
-          if (account) fetchBalances(account);
+        if (chainId !== MONAD_TESTNET_PARAMS.chainId) {
+          alert('Vui lòng chuyển về Monad Testnet!');
+          disconnectWallet();
+        } else if (account) {
+          fetchBalances(account);
         }
       };
 
@@ -544,24 +563,26 @@ const SwapInterface = () => {
   const fetchBalances = async (account) => {
     try {
       const newBalances = {};
-      for (const token of TOKEN_LIST.tokens) {
-        if (token.symbol === "MON") {
-          const balance = await web3.eth.getBalance(account);
-          newBalances[token.symbol] = web3.utils.fromWei(balance, 'ether');
-        } else {
-          const contract = new web3.eth.Contract(ERC20_ABI, token.address);
-          const balance = await contract.methods.balanceOf(account).call();
-          const decimals = await contract.methods.decimals().call();
-          newBalances[token.symbol] = (Number(balance) / Math.pow(10, Number(decimals))).toFixed(4);
-        }
-      }
-      setBalances(newBalances);
+      // Lấy native MON balance
+      const monBalance = await web3.eth.getBalance(account);
+      newBalances.MON = web3.utils.fromWei(monBalance, 'ether');
+      // Lấy PDC balance
+      const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
+      const pdcBalance = await pdcContract.methods.balanceOf(account).call();
+      newBalances.PDC = web3.utils.fromWei(pdcBalance, 'ether');
+      // Lấy WMON balance
+      const wmonContract = new web3.eth.Contract(ERC20_ABI, WMON_ADDRESS);
+      const wmonBalance = await wmonContract.methods.balanceOf(account).call();
+      newBalances.WMON = web3.utils.fromWei(wmonBalance, 'ether');
+
+      setBalances({
+        MON: Number(newBalances.MON).toFixed(4),
+        PDC: Number(newBalances.PDC).toFixed(4),
+        WMON: Number(newBalances.WMON).toFixed(4)
+      });
     } catch (error) {
       console.error('Lỗi lấy số dư:', error);
-      setBalances({
-        MON: '0.0000',
-        PDC: '0.0000'
-      });
+      setBalances({ MON: '0.0000', PDC: '0.0000', WMON: '0.0000' });
     }
   };
 
@@ -581,41 +602,36 @@ const SwapInterface = () => {
     if (!validateInput() || !web3 || !account) return;
     try {
       setLoading(true);
-      const router = new web3.eth.Contract(ROUTER_ABI, ROUTER_ADDRESS);
-      const path = [
-        inputToken.address === '0xNative' ? getWrappedNativeAddress() : inputToken.address,
-        outputToken.address === '0xNative' ? getWrappedNativeAddress() : outputToken.address
-      ];
+      const router = new web3.eth.Contract(UNISWAP_ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
+      const deadline = Math.floor(Date.now() / 1000) + 300;
       const amountIn = web3.utils.toWei(inputAmount, 'ether');
       const amountOutMin = web3.utils.toWei(
         (outputAmount * (1 - slippage / 100)).toString(),
         'ether'
       );
-      const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
       let tx;
       if (inputToken.symbol === 'MON') {
-        tx = await router.methods.swapExactETHForTokens(
-          amountOutMin,
-          path,
-          account,
-          deadline
-        ).send({
-          from: account,
-          value: amountIn
-        });
-      } else {
+        const path = [WMON_ADDRESS, TOKEN_LIST.tokens[0].address];
+        tx = await router.methods
+          .swapExactETHForTokens(amountOutMin, path, account, deadline)
+          .send({ from: account, value: amountIn });
+      } else if (outputToken.symbol === 'MON') {
+        const path = [inputToken.address, WMON_ADDRESS];
         const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
-        await tokenContract.methods.approve(ROUTER_ADDRESS, amountIn).send({ from: account });
-        tx = await router.methods.swapExactTokensForTokens(
-          amountIn,
-          amountOutMin,
-          path,
-          account,
-          deadline
-        ).send({ from: account });
+        await tokenContract.methods.approve(UNISWAP_ROUTER_ADDRESS, amountIn).send({ from: account });
+        tx = await router.methods
+          .swapExactTokensForETH(amountIn, amountOutMin, path, account, deadline)
+          .send({ from: account });
+      } else {
+        const path = [inputToken.address, outputToken.address];
+        const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
+        await tokenContract.methods.approve(UNISWAP_ROUTER_ADDRESS, amountIn).send({ from: account });
+        tx = await router.methods
+          .swapExactTokensForTokens(amountIn, amountOutMin, path, account, deadline)
+          .send({ from: account });
       }
       if (tx.status) {
-        alert('Swap thành công!');
+        alert(`Swap thành công! TX Hash: ${tx.transactionHash}`);
         await fetchBalances(account);
         setInputAmount('');
         setOutputAmount('');
@@ -631,24 +647,28 @@ const SwapInterface = () => {
   const calculateSwapRate = async () => {
     if (!inputAmount || !web3) return;
     try {
-      const router = new web3.eth.Contract(ROUTER_ABI, ROUTER_ADDRESS);
-      const path = [
-        inputToken.address === '0xNative' ? getWrappedNativeAddress() : inputToken.address,
-        outputToken.address === '0xNative' ? getWrappedNativeAddress() : outputToken.address
-      ];
+      const router = new web3.eth.Contract(UNISWAP_ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
+      let path = [];
+      if (inputToken.symbol === 'MON') {
+        path = [WMON_ADDRESS, outputToken.address];
+      } else if (outputToken.symbol === 'MON') {
+        path = [inputToken.address, WMON_ADDRESS];
+      } else {
+        path = [inputToken.address, outputToken.address];
+      }
       const amountIn = web3.utils.toWei(inputAmount, 'ether');
-      const amountsOut = await router.methods.getAmountsOut(amountIn, path).call();
-      const outAmt = web3.utils.fromWei(amountsOut[1], 'ether');
-      setOutputAmount(outAmt);
-      const priceImpact = ((1 - (outAmt / (inputAmount * 1.5))) * 100).toFixed(2);
-      setPriceImpact(priceImpact);
+      const amounts = await router.methods.getAmountsOut(amountIn, path).call();
+      const output = web3.utils.fromWei(amounts[1], 'ether');
+      setOutputAmount(output);
+      // Giả sử giá thị trường là 1.5
+      const idealOutput = inputAmount * 1.5;
+      const impact = ((idealOutput - output) / idealOutput * 100).toFixed(2);
+      setPriceImpact(Math.abs(impact));
     } catch (error) {
       console.error('Lỗi tính tỷ giá:', error);
+      setOutputAmount('0.0000');
+      setPriceImpact(0.00);
     }
-  };
-
-  const getWrappedNativeAddress = () => {
-    return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
   };
 
   const validateInput = () => {
