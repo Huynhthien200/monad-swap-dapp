@@ -140,7 +140,7 @@ const TOKEN_LIST = {
       symbol: "MON",
       name: "Monad",
       decimals: 18,
-      logoURI: "https://github.com/Huynhthien200/file/blob/main/MON.png"
+      logoURI: "https://example.com/monad-logo.png"
     }
   ]
 };
@@ -451,7 +451,7 @@ const SwapInterface = () => {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
-  // Thêm state cho Permit2 & Universal Router
+  // State cho Permit2 & Universal Router
   const [usePermit2, setUsePermit2] = useState(false);
   const [useUniversalRouter, setUseUniversalRouter] = useState(false);
 
@@ -560,6 +560,16 @@ const SwapInterface = () => {
     }
   }, [account, web3]);
 
+  // -------------------- useEffect TÍNH TỶ GIÁ --------------------
+  useEffect(() => {
+    const fetchRate = async () => {
+      if (web3 && inputAmount && inputToken && outputToken) {
+        await calculateSwapRate();
+      }
+    };
+    fetchRate();
+  }, [inputToken, outputToken, inputAmount, web3]);
+
   const checkNetwork = async (web3) => {
     try {
       const chainId = await web3.eth.getChainId();
@@ -602,14 +612,11 @@ const SwapInterface = () => {
   const fetchBalances = async (account) => {
     try {
       const newBalances = {};
-      // Lấy native MON balance
       const monBalance = await web3.eth.getBalance(account);
       newBalances.MON = web3.utils.fromWei(monBalance, 'ether');
-      // Lấy PDC balance
       const pdcContract = new web3.eth.Contract(ERC20_ABI, TOKEN_LIST.tokens[0].address);
       const pdcBalance = await pdcContract.methods.balanceOf(account).call();
       newBalances.PDC = web3.utils.fromWei(pdcBalance, 'ether');
-      // Lấy WMON balance
       const wmonContract = new web3.eth.Contract(ERC20_ABI, WMON_ADDRESS);
       const wmonBalance = await wmonContract.methods.balanceOf(account).call();
       newBalances.WMON = web3.utils.fromWei(wmonBalance, 'ether');
@@ -629,15 +636,17 @@ const SwapInterface = () => {
     e.target.src = 'https://via.placeholder.com/32';
   };
 
+  // -------------------- switchTokens --------------------
   const switchTokens = () => {
     const temp = inputToken;
     setInputToken(outputToken);
     setOutputToken(temp);
     setInputAmount('');
     setOutputAmount('');
+    calculateSwapRate(); // Kích hoạt tính toán lại
   };
 
-  // -------------------- TÍNH NĂNG PHÉP DUYỆT & UNIVERSAL ROUTER --------------------
+  // -------------------- PHÊ DUYỆT & UNIVERSAL ROUTER --------------------
   const approveWithPermit2 = async (tokenAddress, amount) => {
     const permit2 = new web3.eth.Contract(PERMIT2_ABI, PERMIT2_ADDRESS);
     const deadline = Math.floor(Date.now() / 1000) + 3600;
@@ -649,7 +658,6 @@ const SwapInterface = () => {
       nonce: nonce,
       deadline: deadline
     };
-    // Giả lập ký (trong thực tế cần triển khai EIP-712)
     const signature = {
       v: 28,
       r: '0x'.padEnd(66, '1'),
@@ -687,18 +695,48 @@ const SwapInterface = () => {
     ).send({ from: account, value: inputToken.symbol === 'MON' ? amountIn : 0 });
   };
 
-  // -------------------- HANDLER SWAP --------------------
+  // -------------------- calculateSwapRate --------------------
+  const calculateSwapRate = async () => {
+    if (!inputAmount || !web3 || !inputToken || !outputToken) return;
+    
+    try {
+      const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
+      let path = [];
+      const isInputNative = inputToken.symbol === 'MON';
+      const isOutputNative = outputToken.symbol === 'MON';
+
+      if (isInputNative) {
+        path = [WMON_ADDRESS, isOutputNative ? WMON_ADDRESS : outputToken.address];
+      } else if (isOutputNative) {
+        path = [inputToken.address, WMON_ADDRESS];
+      } else {
+        path = [inputToken.address, outputToken.address];
+      }
+
+      path = path.filter(addr => addr !== '0xNative');
+
+      const amountIn = web3.utils.toWei(inputAmount, 'ether');
+      const amounts = await router.methods.getAmountsOut(amountIn, path).call();
+      
+      if (amounts && amounts.length > 1) {
+        const output = web3.utils.fromWei(amounts[amounts.length - 1], 'ether');
+        setOutputAmount(output);
+        const idealOutput = inputAmount * 1.5; // Giá lý tưởng giả định
+        const impact = ((idealOutput - output)/idealOutput * 100).toFixed(2);
+        setPriceImpact(Math.abs(impact));
+      }
+    } catch (error) {
+      console.error('Lỗi tính tỷ giá:', error);
+      setOutputAmount('0.0000');
+      setPriceImpact(0.00);
+    }
+  };
+
+  // -------------------- handleSwap --------------------
   const handleSwap = async () => {
     if (!validateInput() || !web3 || !account) return;
     try {
       setLoading(true);
-      // Nếu sử dụng Universal Router thì thực hiện theo path đó
-      if (useUniversalRouter) {
-        await executeUniversalSwap();
-        setLoading(false);
-        return;
-      }
-      const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
       const deadline = Math.floor(Date.now() / 1000) + 300;
       const amountIn = web3.utils.toWei(inputAmount, 'ether');
       const amountOutMin = web3.utils.toWei(
@@ -706,25 +744,50 @@ const SwapInterface = () => {
         'ether'
       );
       let tx;
-      // Nếu token không phải native và bật Permit2, sử dụng Permit2 để phê duyệt
+      let path = [];
+      
+      if (useUniversalRouter) {
+        await executeUniversalSwap();
+        setLoading(false);
+        return;
+      }
+      
+      const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
+      
       if (inputToken.symbol !== 'MON' && usePermit2) {
         await approveWithPermit2(inputToken.address, amountIn);
       } else if (inputToken.symbol !== 'MON') {
         const tokenContract = new web3.eth.Contract(ERC20_ABI, inputToken.address);
         await tokenContract.methods.approve(UNISWAP_ROUTER_ADDRESS, amountIn).send({ from: account });
       }
+      
       if (inputToken.symbol === 'MON') {
-        const path = [WMON_ADDRESS, outputToken.address];
+        path = [WMON_ADDRESS, outputToken.address];
+        if (path.length < 2) {
+          alert('Đường giao dịch không hợp lệ!');
+          setLoading(false);
+          return;
+        }
         tx = await router.methods
           .swapExactETHForTokens(amountOutMin, path, account, deadline)
           .send({ from: account, value: amountIn });
       } else if (outputToken.symbol === 'MON') {
-        const path = [inputToken.address, WMON_ADDRESS];
+        path = [inputToken.address, WMON_ADDRESS];
+        if (path.length < 2) {
+          alert('Đường giao dịch không hợp lệ!');
+          setLoading(false);
+          return;
+        }
         tx = await router.methods
           .swapExactTokensForETH(amountIn, amountOutMin, path, account, deadline)
           .send({ from: account });
       } else {
-        const path = [inputToken.address, outputToken.address];
+        path = [inputToken.address, outputToken.address];
+        if (path.length < 2) {
+          alert('Đường giao dịch không hợp lệ!');
+          setLoading(false);
+          return;
+        }
         tx = await router.methods
           .swapExactTokensForTokens(amountIn, amountOutMin, path, account, deadline)
           .send({ from: account });
@@ -740,33 +803,6 @@ const SwapInterface = () => {
       alert(`Lỗi: ${error.message}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const calculateSwapRate = async () => {
-    if (!inputAmount || !web3) return;
-    try {
-      const router = new web3.eth.Contract(ROUTER_ABI, UNISWAP_ROUTER_ADDRESS);
-      let path = [];
-      if (inputToken.symbol === 'MON') {
-        path = [WMON_ADDRESS, outputToken.address];
-      } else if (outputToken.symbol === 'MON') {
-        path = [inputToken.address, WMON_ADDRESS];
-      } else {
-        path = [inputToken.address, outputToken.address];
-      }
-      const amountIn = web3.utils.toWei(inputAmount, 'ether');
-      const amounts = await router.methods.getAmountsOut(amountIn, path).call();
-      const output = web3.utils.fromWei(amounts[1], 'ether');
-      setOutputAmount(output);
-      // Giả sử giá thị trường là 1.5
-      const idealOutput = inputAmount * 1.5;
-      const impact = ((idealOutput - output) / idealOutput * 100).toFixed(2);
-      setPriceImpact(Math.abs(impact));
-    } catch (error) {
-      console.error('Lỗi tính tỷ giá:', error);
-      setOutputAmount('0.0000');
-      setPriceImpact(0.00);
     }
   };
 
@@ -927,7 +963,6 @@ const SwapInterface = () => {
           priceImpact={priceImpact}
           gasFee={gasFee}
         />
-        {/* Thêm các checkbox lựa chọn Permit2 và Universal Router */}
         <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
           <label style={{ color: currentTheme.textPrimary, fontSize: '14px' }}>
             <input
